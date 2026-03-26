@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>蜘蛛纸牌 XP 复刻</title>
+  <link rel="icon" href="resource/ICON/ICON103_icon.ico">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="menu-hotspot" aria-hidden="true"></div>
+    <header class="menu-bar">
+      <div class="menu-root" tabindex="0">
+        游戏 (G)
+        <div class="menu-dropdown">
+          <button class="menu-item" id="new-game-btn">开局 (N)\tF2</button>
+          <button class="menu-item disabled" id="restart-game-btn">重新开局 (R)</button>
+          <div class="menu-separator" role="separator"></div>
+          <button class="menu-item" id="undo-btn">撤销 (U)\tCtrl+Z</button>
+          <button class="menu-item" id="deal-btn">新一轮发牌 (D)\tD</button>
+          <button class="menu-item" id="hint-btn">显示可行的操作 (M)\tM</button>
+          <div class="menu-separator" role="separator"></div>
+          <button class="menu-item" id="difficulty-btn">难易级别 (I)...\tF3</button>
+          <button class="menu-item" id="stats-btn">战况 (T)...\tF4</button>
+          <button class="menu-item" id="options-btn">选项 (P)...\tF5</button>
+          <div class="menu-separator" role="separator"></div>
+          <button class="menu-item" id="save-btn">保存本次游戏 (S)\tCtrl+S</button>
+          <button class="menu-item" id="load-btn">打开上次保存的游戏 (O)\tCtrl+O</button>
+          <div class="menu-separator" role="separator"></div>
+          <button class="menu-item" id="exit-btn">退出 (X)</button>
+        </div>
+      </div>
+      <button class="menu-root menu-direct-btn" id="quick-deal-btn">发牌 (D)</button>
+      <div class="menu-root" tabindex="0">
+        帮助 (H)
+        <div class="menu-dropdown">
+          <button class="menu-item" id="help-content-btn">目录 (C)\tF1</button>
+          <div class="menu-separator" role="separator"></div>
+          <button class="menu-item" id="about-btn">关于蜘蛛 (A)...</button>
+        </div>
+      </div>
+      <div id="status-text">准备开始</div>
+    </header>
+
+    <main id="board">
+      <section id="columns" aria-label="牌列"></section>
+
+      <section id="bottom-ui">
+        <div id="completed-area" title="已移除序列"></div>
+        <button id="score-box" title="点击获取提示">
+          <div>分数: <span id="score">500</span></div>
+          <div>操作: <span id="moves">0</span></div>
+          <div>时间: <span id="time">00:00</span></div>
+        </button>
+        <button id="stock" title="点击发牌"></button>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="stats-dialog" class="xp-dialog">
+    <h2>蜘蛛统计数据</h2>
+    <div class="stats-grid">
+      <div>最高分</div><div id="stats-high-score">0</div>
+      <div>胜局</div><div id="stats-wins">0</div>
+      <div>负局</div><div id="stats-losses">0</div>
+      <div>胜率</div><div id="stats-win-rate">0%</div>
+      <div>历史最长连胜</div><div id="stats-best-win">0</div>
+      <div>历史最长连负</div><div id="stats-best-loss">0</div>
+      <div>当前连胜</div><div id="stats-current-win">0</div>
+      <div>当前连负</div><div id="stats-current-loss">0</div>
+    </div>
+    <div class="dialog-actions">
+      <button id="stats-reset-btn">复位</button>
+      <button id="stats-close-btn">确定</button>
+    </div>
+  </dialog>
+
+  <dialog id="difficulty-dialog" class="xp-dialog">
+    <h2>难易级别</h2>
+    <p class="dialog-description">请选择游戏的难易级别:</p>
+    <div class="difficulty-row">
+      <img src="resource/ICON/ICON120 heitao.ico" alt="黑桃">
+      <label><input type="radio" name="difficulty-choice" value="easy">初级 (E): 单色</label>
+    </div>
+    <div class="difficulty-row">
+      <img src="resource/ICON/ICON121 fangpian.ico" alt="方片">
+      <img src="resource/ICON/ICON122 hongtao.ico" alt="红桃">
+      <label><input type="radio" name="difficulty-choice" value="medium">中级 (M): 双色</label>
+    </div>
+    <div class="difficulty-row">
+      <img src="resource/ICON/ICON120 heitao.ico" alt="黑桃">
+      <img src="resource/ICON/ICON121 fangpian.ico" alt="方片">
+      <img src="resource/ICON/ICON122 hongtao.ico" alt="红桃">
+      <img src="resource/ICON/ICON123 meihua.ico" alt="梅花">
+      <label><input type="radio" name="difficulty-choice" value="hard">高级 (D): 四色</label>
+    </div>
+    <div class="dialog-actions">
+      <button id="difficulty-ok-btn">确定</button>
+      <button id="difficulty-cancel-btn">取消</button>
+    </div>
+  </dialog>
+
+  <dialog id="options-dialog" class="xp-dialog">
+    <h2>蜘蛛选项</h2>
+    <div class="options-grid">
+      <label><input id="opt-anim-deal" type="checkbox">发牌时进行动画处理 (A)</label>
+      <label><input id="opt-save-on-exit" type="checkbox">退出时自动保存游戏 (S)</label>
+      <label><input id="opt-load-at-start" type="checkbox">启动时自动打开上次游戏 (O)</label>
+      <label><input id="opt-prompt-save" type="checkbox">保存游戏前提示 (P)</label>
+      <label><input id="opt-prompt-load" type="checkbox">打开已保存的游戏前提示 (B)</label>
+      <label><input id="opt-sound" type="checkbox">使用声音效果 (E)</label>
+    </div>
+    <div class="dialog-actions">
+      <button id="options-ok-btn">确定</button>
+      <button id="options-cancel-btn">取消</button>
+    </div>
+  </dialog>
+
+  <dialog id="about-dialog" class="xp-dialog">
+    <h2>关于蜘蛛</h2>
+    <p class="about-title">蜘蛛</p>
+    <p class="about-copy">(C) 1998-2000 Microsoft Corporation.<br>保留所有权利。</p>
+    <div class="dialog-actions">
+      <button id="about-ok-btn">确定</button>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
