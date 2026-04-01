@@ -509,6 +509,7 @@
       document.getElementById("options-btn").addEventListener("click", () => this.openOptionsDialog());
       document.getElementById("help-content-btn").addEventListener("click", () => this.openHelpContent());
       document.getElementById("about-btn").addEventListener("click", () => this.openAboutDialog());
+      document.getElementById("test-win-btn").addEventListener("click", () => this.forceWinForTest());
       document.getElementById("exit-btn").addEventListener("click", () => this.exitGame());
       document.getElementById("stats-close-btn").addEventListener("click", () => this.statsDialogEl.close());
       document.getElementById("stats-reset-btn").addEventListener("click", () => this.resetStats());
@@ -540,6 +541,15 @@
         this.clearDragPreview();
         this.dragPreviewEl = this.buildDragPreview(fromCol, start);
         this.playSound("dragStart");
+        setTimeout(() => {
+          const columnEl = this.columnsEl.querySelector(`.column[data-col='${fromCol}']`);
+          if (columnEl) {
+            const cards = columnEl.querySelectorAll(".card");
+            for (let i = start; i < cards.length; i += 1) {
+              cards[i].classList.add("dragging");
+            }
+          }
+        }, 0);
         if (event.dataTransfer) {
           const { cardWidth, faceUpSpacing } = this.getCardLayoutMetrics();
           event.dataTransfer.effectAllowed = "move";
@@ -582,6 +592,7 @@
         }
         const columnEl = event.target.closest(".column");
         this.setDragOverColumn(null);
+        this.clearDraggingCards();
         if (!columnEl) {
           this.clearDragPreview();
           this.dragging = null;
@@ -608,6 +619,7 @@
       this.columnsEl.addEventListener("dragend", () => {
         this.setDragOverColumn(null);
         this.clearDragPreview();
+        this.clearDraggingCards();
         this.dragging = null;
         this.selected = null;
         this.render();
@@ -1008,6 +1020,13 @@
       this.dragPreviewEl = null;
     }
 
+    clearDraggingCards() {
+      const cards = this.columnsEl.querySelectorAll(".card.dragging");
+      for (const card of cards) {
+        card.classList.remove("dragging");
+      }
+    }
+
     clearDealAnimationState() {
       this.dealAnimationOrder.clear();
       if (this.dealAnimationTimer) {
@@ -1038,10 +1057,9 @@
       const columnRect = columnEl.getBoundingClientRect();
       const completedRect = this.completedEl.getBoundingClientRect();
       const { cardWidth, cardHeight } = this.getCardLayoutMetrics();
-      const gap = parseFloat(window.getComputedStyle(this.completedEl).columnGap || window.getComputedStyle(this.completedEl).gap || "6") || 6;
 
-      const targetX = completedRect.left + slotIndex * (cardWidth + gap);
-      const targetY = completedRect.bottom - cardHeight;
+      const targetX = completedRect.left + slotIndex * 18;
+      const targetY = completedRect.top;
       const cardLeft = columnRect.left + (columnRect.width - cardWidth) / 2;
 
       for (let i = 0; i < removedCards.length; i += 1) {
@@ -1713,18 +1731,31 @@
     renderCompleted() {
       this.completedEl.innerHTML = "";
       const stacks = Array.isArray(this.state.completedStacks) ? this.state.completedStacks : [];
+      if (!stacks.length) {
+        this.state.completedCount = 0;
+        return;
+      }
+      const pile = document.createElement("div");
+      pile.className = "completed-pile";
+      const { cardWidth } = this.getCardLayoutMetrics();
+      const revealPx = 18;
       for (let i = 0; i < stacks.length; i += 1) {
         const suit = stacks[i].suit;
         const kingIndex = (SUIT_BASE[suit] || SUIT_BASE.spades) + 13;
-        const slot = document.createElement("div");
-        slot.className = "complete-slot";
         const cardEl = document.createElement("img");
-        cardEl.className = "complete-slot-card";
+        cardEl.className = "completed-pile-card";
         cardEl.src = `resource/FELT/CARD${kingIndex}.bmp`;
         cardEl.alt = `${suit} K`;
-        slot.appendChild(cardEl);
-        this.completedEl.appendChild(slot);
+        cardEl.draggable = false;
+        cardEl.style.zIndex = String(i + 1);
+        cardEl.style.left = `${i * revealPx}px`;
+        if (i < stacks.length - 1) {
+          cardEl.style.clipPath = `inset(0 ${cardWidth - revealPx}px 0 0)`;
+        }
+        pile.appendChild(cardEl);
       }
+      pile.style.width = `${(stacks.length - 1) * revealPx + cardWidth}px`;
+      this.completedEl.appendChild(pile);
       this.state.completedCount = stacks.length;
     }
 

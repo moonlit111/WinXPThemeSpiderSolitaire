@@ -14,19 +14,19 @@
       <div class="menu-root" tabindex="0">
         游戏 (G)
         <div class="menu-dropdown">
-          <button class="menu-item" id="new-game-btn">开局 (N)\tF2</button>
+          <button class="menu-item has-shortcut" id="new-game-btn"><span class="menu-item-label">开局 (N)</span><span class="menu-item-shortcut">F2</span></button>
           <button class="menu-item disabled" id="restart-game-btn">重新开局 (R)</button>
           <div class="menu-separator" role="separator"></div>
-          <button class="menu-item" id="undo-btn">撤销 (U)\tCtrl+Z</button>
-          <button class="menu-item" id="deal-btn">新一轮发牌 (D)\tD</button>
-          <button class="menu-item" id="hint-btn">显示可行的操作 (M)\tM</button>
+          <button class="menu-item has-shortcut" id="undo-btn"><span class="menu-item-label">撤销 (U)</span><span class="menu-item-shortcut">Ctrl+Z</span></button>
+          <button class="menu-item has-shortcut" id="deal-btn"><span class="menu-item-label">新一轮发牌 (D)</span><span class="menu-item-shortcut">D</span></button>
+          <button class="menu-item has-shortcut" id="hint-btn"><span class="menu-item-label">显示可行的操作 (M)</span><span class="menu-item-shortcut">M</span></button>
           <div class="menu-separator" role="separator"></div>
-          <button class="menu-item" id="difficulty-btn">难易级别 (I)...\tF3</button>
-          <button class="menu-item" id="stats-btn">战况 (T)...\tF4</button>
-          <button class="menu-item" id="options-btn">选项 (P)...\tF5</button>
+          <button class="menu-item has-shortcut" id="difficulty-btn"><span class="menu-item-label">难易级别 (I)...</span><span class="menu-item-shortcut">F3</span></button>
+          <button class="menu-item has-shortcut" id="stats-btn"><span class="menu-item-label">战况 (T)...</span><span class="menu-item-shortcut">F4</span></button>
+          <button class="menu-item has-shortcut" id="options-btn"><span class="menu-item-label">选项 (P)...</span><span class="menu-item-shortcut">F5</span></button>
           <div class="menu-separator" role="separator"></div>
-          <button class="menu-item" id="save-btn">保存本次游戏 (S)\tCtrl+S</button>
-          <button class="menu-item" id="load-btn">打开上次保存的游戏 (O)\tCtrl+O</button>
+          <button class="menu-item has-shortcut" id="save-btn"><span class="menu-item-label">保存本次游戏 (S)</span><span class="menu-item-shortcut">Ctrl+S</span></button>
+          <button class="menu-item has-shortcut" id="load-btn"><span class="menu-item-label">打开保存的游戏 (O)</span><span class="menu-item-shortcut">Ctrl+O</span></button>
           <div class="menu-separator" role="separator"></div>
           <button class="menu-item" id="exit-btn">退出 (X)</button>
         </div>
@@ -35,7 +35,9 @@
       <div class="menu-root" tabindex="0">
         帮助 (H)
         <div class="menu-dropdown">
-          <button class="menu-item" id="help-content-btn">目录 (C)\tF1</button>
+          <button class="menu-item has-shortcut" id="help-content-btn"><span class="menu-item-label">目录 (C)</span><span class="menu-item-shortcut">F1</span></button>
+          <div class="menu-separator" role="separator"></div>
+          <button class="menu-item" id="test-win-btn">测试胜利 (T)</button>
           <div class="menu-separator" role="separator"></div>
           <button class="menu-item" id="about-btn">关于蜘蛛 (A)...</button>
         </div>
@@ -49,9 +51,9 @@
       <section id="bottom-ui">
         <div id="completed-area" title="已移除序列"></div>
         <button id="score-box" title="点击获取提示">
-          <div>分数: <span id="score">500</span></div>
-          <div>操作: <span id="moves">0</span></div>
-          <div>时间: <span id="time">00:00</span></div>
+          <div><span class="score-label">分数:</span> <span id="score" class="score-value">500</span></div>
+          <div><span class="score-label">操作:</span> <span id="moves" class="score-value">0</span></div>
+          <div><span class="score-label">时间:</span> <span id="time" class="score-value">00:00</span></div>
         </button>
         <button id="stock" title="点击发牌"></button>
       </section>
