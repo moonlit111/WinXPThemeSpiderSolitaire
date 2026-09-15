@@ -1,15 +1,12 @@
-/* Windows XP Luna Classic Theme */
+/* Windows XP Luna Classic Theme - 1:1 Pixel-Perfect Recreation */
 
 :root {
   --xp-blue-dark: #0055ea;
   --xp-blue-light: #3b88f5;
-  --xp-blue-border: #002e8c;
   --xp-bg-gray: #ece9d8;
   --xp-border-light: #ffffff;
   --xp-border-dark: #716f64;
-  --xp-border-darker: #404040;
   --xp-menu-hover: #316ac5;
-  --xp-status-inset: #aca899;
 }
 
 * {
@@ -21,8 +18,8 @@
 }
 
 body {
-  font-family: 'Tahoma', 'Segoe UI', 'SimSun', '宋体', sans-serif;
-  font-size: 11px;
+  font-family: 'SimSun', '宋体', 'Tahoma', 'Segoe UI', sans-serif;
+  font-size: 12px;
   background-color: #004e98;
   overflow: hidden;
   height: 100vh;
@@ -36,18 +33,18 @@ body {
 .xp-window {
   width: 100vw;
   height: 100vh;
-  max-width: 1200px;
-  max-height: 860px;
+  max-width: 1100px;
+  max-height: 800px;
   display: flex;
   flex-direction: column;
   background: var(--xp-bg-gray);
   border: 3px solid #0055ea;
-  border-radius: 8px 8px 0 0;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   position: relative;
 }
 
-@media (max-width: 1024px) or (max-height: 720px) {
+@media (max-width: 900px) or (max-height: 650px) {
   .xp-window {
     max-width: 100vw;
     max-height: 100vh;
@@ -58,9 +55,9 @@ body {
 
 /* Title Bar */
 .xp-titlebar {
-  height: 30px;
-  background: linear-gradient(180deg, #0058e6 0%, #3a8df8 10%, #0053e1 50%, #0043c8 90%, #002c9a 100%);
-  border-radius: 5px 5px 0 0;
+  height: 28px;
+  background: linear-gradient(180deg, #0058e6 0%, #3a8df8 12%, #0053e1 50%, #0043c8 90%, #002c9a 100%);
+  border-radius: 4px 4px 0 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -72,8 +69,8 @@ body {
 }
 
 .xp-titlebar-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   margin-right: 6px;
   vertical-align: middle;
 }
@@ -122,9 +119,9 @@ body {
   background: linear-gradient(180deg, #f87171 0%, #dc2626 100%);
 }
 
-/* Menu Bar */
+/* Menu Bar (游戏, 发牌, 帮助) */
 .xp-menubar {
-  height: 24px;
+  height: 22px;
   background-color: var(--xp-bg-gray);
   border-bottom: 1px solid #aca899;
   display: flex;
@@ -137,7 +134,7 @@ body {
 
 .xp-menu-item {
   position: relative;
-  padding: 3px 8px;
+  padding: 2px 7px;
   cursor: default;
   border-radius: 2px;
 }
@@ -155,7 +152,7 @@ body {
   background-color: #ffffff;
   border: 1px solid #716f64;
   box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
-  min-width: 170px;
+  min-width: 210px;
   padding: 2px 0;
   z-index: 1000;
   color: #000000;
@@ -166,12 +163,13 @@ body {
 }
 
 .xp-dropdown-row {
-  padding: 4px 20px 4px 24px;
+  padding: 3px 18px 3px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   cursor: default;
   position: relative;
+  font-size: 12px;
 }
 
 .xp-dropdown-row:hover {
@@ -182,7 +180,7 @@ body {
 .xp-dropdown-shortcut {
   font-size: 11px;
   color: #666;
-  margin-left: 16px;
+  margin-left: 20px;
 }
 
 .xp-dropdown-row:hover .xp-dropdown-shortcut {
@@ -195,35 +193,7 @@ body {
   margin: 3px 2px;
 }
 
-/* Status Bar */
-.xp-statusbar {
-  height: 24px;
-  background-color: var(--xp-bg-gray);
-  border-top: 1px solid #aca899;
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-  gap: 4px;
-  font-size: 11px;
-}
-
-.xp-status-pane {
-  border: 1px solid #716f64;
-  border-top-color: #aca899;
-  border-left-color: #aca899;
-  border-bottom-color: #ffffff;
-  border-right-color: #ffffff;
-  padding: 2px 10px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-}
-
-.xp-status-pane.grow {
-  flex: 1;
-}
-
-/* Modal Dialog */
+/* Modal Dialog Component */
 .xp-dialog-overlay {
   display: none;
   position: absolute;
@@ -231,7 +201,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.2);
   z-index: 2000;
   align-items: center;
   justify-content: center;
@@ -245,16 +215,15 @@ body {
   background: var(--xp-bg-gray);
   border: 3px solid #0055ea;
   border-radius: 6px 6px 0 0;
-  box-shadow: 2px 4px 15px rgba(0, 0, 0, 0.4);
-  width: 320px;
-  min-height: 140px;
+  box-shadow: 2px 4px 20px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
+  min-width: 280px;
 }
 
 .xp-dialog-titlebar {
-  height: 26px;
-  background: linear-gradient(180deg, #0058e6 0%, #3a8df8 10%, #0053e1 50%, #0043c8 90%, #002c9a 100%);
+  height: 25px;
+  background: linear-gradient(180deg, #0058e6 0%, #3a8df8 12%, #0053e1 50%, #0043c8 90%, #002c9a 100%);
   border-radius: 3px 3px 0 0;
   display: flex;
   align-items: center;
@@ -262,31 +231,18 @@ body {
   padding: 0 4px 0 8px;
   color: #ffffff;
   font-weight: bold;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .xp-dialog-body {
-  padding: 16px 14px;
+  padding: 12px 16px;
   flex: 1;
   font-size: 12px;
-  line-height: 1.5;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.xp-dialog-icon {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-}
-
-.xp-dialog-content {
-  flex: 1;
+  line-height: 1.4;
 }
 
 .xp-dialog-footer {
-  padding: 8px 12px 12px;
+  padding: 8px 14px 12px;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -294,13 +250,13 @@ body {
 
 .xp-btn {
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   min-width: 72px;
   height: 23px;
   background: linear-gradient(180deg, #ffffff 0%, #ece9d8 100%);
   border: 1px solid #003c74;
   border-radius: 3px;
-  padding: 0 8px;
+  padding: 0 10px;
   cursor: pointer;
   outline: none;
   box-shadow: inset 0 1px 0 #ffffff;
@@ -321,20 +277,65 @@ body {
   font-weight: bold;
 }
 
-/* Classic Windows Minimized State (Boss Key Esc) */
-.xp-window.minimized {
-  height: 30px !important;
-  max-height: 30px !important;
-  width: 240px !important;
-  position: fixed;
-  bottom: 10px;
+/* Windows GroupBox styling */
+.xp-groupbox {
+  border: 1px solid #d0d0d0;
+  border-radius: 3px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  position: relative;
+}
+
+.xp-groupbox-title {
+  position: absolute;
+  top: -8px;
   left: 10px;
+  background: var(--xp-bg-gray);
+  padding: 0 4px;
+  font-size: 11px;
+  color: #003399;
+}
+
+/* Windows TabControl styling (Dialog 118) */
+.xp-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #aca899;
+  margin-bottom: 8px;
+}
+
+.xp-tab {
+  padding: 4px 12px;
+  background: #e0ded0;
+  border: 1px solid #aca899;
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.xp-tab.active {
+  background: var(--xp-bg-gray);
+  font-weight: bold;
+  border-color: #716f64;
+  margin-bottom: -1px;
+  padding-bottom: 5px;
+}
+
+/* Boss Key Minimized Window */
+.xp-window.minimized {
+  height: 28px !important;
+  max-height: 28px !important;
+  width: 220px !important;
+  position: fixed;
+  bottom: 8px;
+  left: 8px;
   border-radius: 4px;
   overflow: hidden;
   z-index: 10000;
 }
+
 .xp-window.minimized .xp-menubar,
-.xp-window.minimized .game-container,
-.xp-window.minimized .xp-statusbar {
+.xp-window.minimized .game-container {
   display: none !important;
 }

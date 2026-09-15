@@ -63,15 +63,16 @@ export class Renderer {
         else downCount++;
       }
 
-      let downStep = 13;
-      let upStep = 23;
+      // Windows XP FUN_01005ca9: face-down cards step is 9px (7-9px visible strip)
+      let downStep = 9;
+      let upStep = 22;
 
       // Auto-compress spacing if column overflows
       const requiredHeight = downCount * downStep + upCount * upStep + cardHeight;
       if (requiredHeight > availableHeight - 20 && cards.length > 1) {
         const scale = (availableHeight - cardHeight - 30) / (downCount * downStep + upCount * upStep);
-        downStep = Math.max(7, Math.floor(downStep * scale));
-        upStep = Math.max(14, Math.floor(upStep * scale));
+        downStep = Math.max(5, Math.floor(downStep * scale));
+        upStep = Math.max(12, Math.floor(upStep * scale));
       }
 
       let currentTop = 0;

@@ -73,60 +73,6 @@ class Card {
   }
 }
 
-
-  // --- src/engine/AudioService.js ---
-/**
- * AudioService.js
- * 1:1 Windows XP Sound Service for Spider Solitaire
- * Mapped to original PE PlaySoundW IDs:
- * - 0x7c (124): deal / foundation run move
- * - 0x7d (125): card drop / ReleaseCapture
- * - 0x7e (126): hint move found swoop
- * - 0x7f (127): hint move not found / blocked alert
- * - 0x80 (128): card pickup / SetCapture
- * - 0x81 (129): game won fanfare
- */
-
-class AudioService {
-  constructor() {
-    this.enabled = localStorage.getItem('spider_sound') !== 'false';
-    this.sounds = {
-      deal: 'assets/sounds/124.wav',
-      drop: 'assets/sounds/125.wav',
-      hint: 'assets/sounds/126.wav',
-      noHint: 'assets/sounds/127.wav',
-      grab: 'assets/sounds/128.wav',
-      win: 'assets/sounds/129.wav'
-    };
-    this.preload();
-  }
-
-  preload() {
-    for (const [key, src] of Object.entries(this.sounds)) {
-      const a = new Audio(src);
-      a.preload = 'auto';
-    }
-  }
-
-  play(name) {
-    if (!this.enabled) return;
-    try {
-      const src = this.sounds[name];
-      if (!src) return;
-      const audio = new Audio(src);
-      audio.volume = 0.8;
-      audio.play().catch(() => {});
-    } catch (e) {}
-  }
-
-  toggleSound() {
-    this.enabled = !this.enabled;
-    localStorage.setItem('spider_sound', this.enabled ? 'true' : 'false');
-    return this.enabled;
-  }
-}
-
-
   // --- src/engine/SpiderGame.js ---
 /**
  * SpiderGame.js
@@ -141,7 +87,6 @@ class AudioService {
  * - FUN_01003a90, FUN_0100315b, FUN_010031ab (Exact 3-level Hint system & cycle queue)
  * - FUN_01003596 (Score clamping & per-difficulty high score)
  */
-
 
 
 const DIFFICULTY = {
@@ -588,393 +533,57 @@ class SpiderGame {
   }
 }
 
-
-  // --- src/ui/Renderer.js ---
+  // --- src/engine/AudioService.js ---
 /**
- * Renderer.js
- * Handles DOM rendering of the 10 tableau columns, cards, stock, foundation, and status bar.
- * Implements exact 250ms sequential flash hint animation (FUN_01004dfb).
+ * AudioService.js
+ * 1:1 Windows XP Sound Service for Spider Solitaire
+ * Mapped to original PE PlaySoundW IDs:
+ * - 0x7c (124): deal / foundation run move
+ * - 0x7d (125): card drop / ReleaseCapture
+ * - 0x7e (126): hint move found swoop
+ * - 0x7f (127): hint move not found / blocked alert
+ * - 0x80 (128): card pickup / SetCapture
+ * - 0x81 (129): game won fanfare
  */
 
-class Renderer {
-  constructor(game, container) {
-    this.game = game;
-    this.container = container;
-    
-    this.tableauEl = container.querySelector('.tableau-area');
-    this.stockEl = container.querySelector('.stock-area');
-    this.foundationEl = container.querySelector('.foundation-area');
-    this.scoreEl = document.getElementById('status-score');
-    this.movesEl = document.getElementById('status-moves');
-    
-    this.columnEls = [];
-    this.initTableauSlots();
-  }
-
-  initTableauSlots() {
-    this.tableauEl.innerHTML = '';
-    this.columnEls = [];
-    for (let c = 0; c < 10; c++) {
-      const colEl = document.createElement('div');
-      colEl.className = 'tableau-column';
-      colEl.dataset.col = c;
-
-      const slot = document.createElement('div');
-      slot.className = 'column-slot';
-      colEl.appendChild(slot);
-
-      this.tableauEl.appendChild(colEl);
-      this.columnEls.push(colEl);
-    }
-  }
-
-  render() {
-    this.renderColumns();
-    this.renderStock();
-    this.renderFoundation();
-    this.renderStatusBar();
-  }
-
-  renderColumns() {
-    const availableHeight = this.tableauEl.clientHeight || 500;
-    const cardHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--card-height')) || 96;
-
-    for (let c = 0; c < 10; c++) {
-      const colEl = this.columnEls[c];
-      const cards = this.game.columns[c];
-      
-      // Clear previous card elements but retain the empty slot
-      colEl.querySelectorAll('.card-element').forEach(el => el.remove());
-
-      if (cards.length === 0) continue;
-
-      let downCount = 0;
-      let upCount = 0;
-      for (const card of cards) {
-        if (card.faceUp) upCount++;
-        else downCount++;
-      }
-
-      let downStep = 13;
-      let upStep = 23;
-
-      // Auto-compress spacing if column overflows
-      const requiredHeight = downCount * downStep + upCount * upStep + cardHeight;
-      if (requiredHeight > availableHeight - 20 && cards.length > 1) {
-        const scale = (availableHeight - cardHeight - 30) / (downCount * downStep + upCount * upStep);
-        downStep = Math.max(7, Math.floor(downStep * scale));
-        upStep = Math.max(14, Math.floor(upStep * scale));
-      }
-
-      let currentTop = 0;
-      for (let i = 0; i < cards.length; i++) {
-        const card = cards[i];
-        const cardEl = document.createElement('div');
-        cardEl.className = `card-element ${card.faceUp ? 'face-up' : 'face-down'}`;
-        cardEl.dataset.col = c;
-        cardEl.dataset.cardIdx = i;
-        cardEl.dataset.cardId = card.id;
-        cardEl.style.top = `${currentTop}px`;
-        cardEl.style.zIndex = i + 1;
-
-        const img = document.createElement('img');
-        img.src = card.faceUp ? card.faceImage : card.backImage;
-        img.alt = card.faceUp ? `${card.rankName} of ${card.suitName}` : 'Card Back';
-        img.draggable = false;
-        cardEl.appendChild(img);
-
-        if (card.faceUp && this.game.isSequenceMovable(c, i)) {
-          cardEl.classList.add('movable');
-        }
-
-        colEl.appendChild(cardEl);
-        currentTop += card.faceUp ? upStep : downStep;
-      }
-    }
-  }
-
-  renderStock() {
-    this.stockEl.innerHTML = '';
-    const dealsLeft = this.game.stockDealsLeft;
-
-    if (dealsLeft <= 0) {
-      const emptyHint = document.createElement('div');
-      emptyHint.className = 'stock-empty-hint';
-      this.stockEl.appendChild(emptyHint);
-      return;
-    }
-
-    for (let i = 0; i < dealsLeft; i++) {
-      const cardEl = document.createElement('div');
-      cardEl.className = 'stock-card';
-      cardEl.style.left = `${i * 8}px`;
-      cardEl.style.zIndex = i + 1;
-
-      const img = document.createElement('img');
-      img.src = 'assets/ui/CARDBACK.png';
-      img.alt = 'Stock Pile';
-      img.draggable = false;
-      cardEl.appendChild(img);
-
-      this.stockEl.appendChild(cardEl);
-    }
-  }
-
-  renderFoundation() {
-    this.foundationEl.innerHTML = '';
-    const suits = this.game.completedSuits;
-
-    for (let i = 0; i < 8; i++) {
-      const slot = document.createElement('div');
-      slot.className = 'foundation-slot';
-
-      if (i < suits.length) {
-        const suit = suits[i];
-        const kingImgIndex = 1 + suit * 13 + 12; // King card index
-        const img = document.createElement('img');
-        img.src = `assets/cards/CARD${kingImgIndex}.png`;
-        img.alt = `Completed Suit ${i + 1}`;
-        img.draggable = false;
-        slot.appendChild(img);
-      }
-      this.foundationEl.appendChild(slot);
-    }
-  }
-
-  renderStatusBar() {
-    if (this.scoreEl) this.scoreEl.textContent = `分数: ${this.game.score}`;
-    if (this.movesEl) this.movesEl.textContent = `操作: ${this.game.moves}`;
-  }
-
-  /**
-   * Exact 1:1 InvertRect hint animation from FUN_01004dfb:
-   * 1. Invert/highlight source card for 250ms (Sleep 0xfa), un-invert.
-   * 2. Invert/highlight destination card/slot for 250ms (Sleep 0xfa), un-invert.
-   */
-  async playHintAnimation(hint) {
-    this.clearHints();
-    if (!hint) return;
-
-    const fromColEl = this.columnEls[hint.fromCol];
-    const toColEl = this.columnEls[hint.toCol];
-    if (!fromColEl || !toColEl) return;
-
-    const sourceCardEl = fromColEl.querySelector(`[data-card-idx="${hint.cardIndex}"]`);
-    const targetCards = toColEl.querySelectorAll('.card-element');
-    const targetEl = targetCards.length > 0 ? targetCards[targetCards.length - 1] : toColEl.querySelector('.column-slot');
-
-    if (sourceCardEl) {
-      sourceCardEl.classList.add('hint-inverted');
-      await new Promise(r => setTimeout(r, 250)); // 250ms
-      sourceCardEl.classList.remove('hint-inverted');
-    }
-
-    if (targetEl) {
-      targetEl.classList.add('hint-inverted');
-      await new Promise(r => setTimeout(r, 250)); // 250ms
-      targetEl.classList.remove('hint-inverted');
-    }
-  }
-
-  clearHints() {
-    this.tableauEl.querySelectorAll('.hint-inverted, .hinted').forEach(el => {
-      el.classList.remove('hint-inverted', 'hinted');
-    });
-  }
-}
-
-
-  // --- src/ui/Dialogs.js ---
-/**
- * Dialogs.js
- * 1:1 Windows XP Modal Dialogs for Spider Solitaire
- * Uses exact strings from spri.exe RT_STRING resource block.
- */
-
-class Dialogs {
+class AudioService {
   constructor() {
-    this.overlay = document.getElementById('dialog-overlay');
-    this.dialogTitle = document.getElementById('dialog-title');
-    this.dialogIcon = document.getElementById('dialog-icon');
-    this.dialogContent = document.getElementById('dialog-content');
-    this.dialogFooter = document.getElementById('dialog-footer');
-    this.closeBtn = document.getElementById('dialog-close-btn');
-
-    this.closeBtn.addEventListener('click', () => this.hide());
-  }
-
-  show({ title, icon, contentHtml, buttons }) {
-    this.dialogTitle.textContent = title || '蜘蛛纸牌';
-    this.dialogIcon.src = icon || 'assets/ui/spider_icon.png';
-    this.dialogContent.innerHTML = contentHtml || '';
-    this.dialogFooter.innerHTML = '';
-
-    buttons.forEach(btn => {
-      const b = document.createElement('button');
-      b.className = `xp-btn ${btn.primary ? 'primary' : ''}`;
-      b.textContent = btn.text;
-      b.addEventListener('click', () => {
-        if (btn.onClick) btn.onClick();
-        this.hide();
-      });
-      this.dialogFooter.appendChild(b);
-    });
-
-    this.overlay.classList.add('show');
-  }
-
-  hide() {
-    this.overlay.classList.remove('show');
-  }
-
-  showAlert(title, message) {
-    this.show({
-      title,
-      contentHtml: `<div style="padding-top: 4px; font-size: 12px;">${message}</div>`,
-      buttons: [
-        { text: '确定', primary: true }
-      ]
-    });
-  }
-
-  showConfirm(title, message, onConfirm) {
-    this.show({
-      title,
-      contentHtml: `<div style="padding-top: 4px; font-size: 12px;">${message}</div>`,
-      buttons: [
-        { text: '是', primary: true, onClick: onConfirm },
-        { text: '否' }
-      ]
-    });
-  }
-
-  showDifficulty(currentDiff, onSelect) {
-    const html = `
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        <div style="font-weight: bold; margin-bottom: 2px;">选择难度级别:</div>
-        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-          <input type="radio" name="diff" value="1" ${currentDiff === 1 ? 'checked' : ''}>
-          <span>初级: 单色 (黑桃)</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-          <input type="radio" name="diff" value="2" ${currentDiff === 2 ? 'checked' : ''}>
-          <span>中级: 双色 (黑桃和红桃)</span>
-        </label>
-        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-          <input type="radio" name="diff" value="4" ${currentDiff === 4 ? 'checked' : ''}>
-          <span>高级: 四色 (全部四种花色)</span>
-        </label>
-      </div>
-    `;
-
-    this.show({
-      title: '蜘蛛纸牌难度',
-      contentHtml: html,
-      buttons: [
-        {
-          text: '确定',
-          primary: true,
-          onClick: () => {
-            const selected = document.querySelector('input[name="diff"]:checked');
-            if (selected && onSelect) {
-              onSelect(parseInt(selected.value));
-            }
-          }
-        },
-        { text: '取消' }
-      ]
-    });
-  }
-
-  showWin(score, moves, onPlayAgain) {
-    const html = `
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        <div style="font-weight: bold; font-size: 13px; color: #004e98;">你赢了!</div>
-        <div>最终得分: <strong>${score}</strong></div>
-        <div>操作次数: <strong>${moves}</strong></div>
-        <div style="margin-top: 6px;">是否开始新游戏?</div>
-      </div>
-    `;
-
-    this.show({
-      title: '你赢了!',
-      contentHtml: html,
-      buttons: [
-        { text: '新游戏', primary: true, onClick: onPlayAgain },
-        { text: '关闭' }
-      ]
-    });
-  }
-
-  /**
-   * Exact Windows XP statistics modal (FUN_01004fa6):
-   * Displays stats for current difficulty, with tabs/switch for Easy, Medium, Difficult.
-   */
-  showStats(allStats, currentDiff, onReset) {
-    const diffKeys = { 1: 'Easy', 2: 'Medium', 4: 'Difficult' };
-    const diffNames = { 1: '初级 (单色)', 2: '中级 (双色)', 4: '高级 (四色)' };
-    
-    let activeKey = diffKeys[currentDiff] || 'Easy';
-    const s = allStats[activeKey] || {
-      highScore: 0, wins: 0, losses: 0, streakWins: 0, streakLosses: 0, streakCurrent: 0, isWinStreak: true
+    this.enabled = localStorage.getItem('spider_sound') !== 'false';
+    this.sounds = {
+      deal: 'assets/sounds/124.wav',
+      drop: 'assets/sounds/125.wav',
+      hint: 'assets/sounds/126.wav',
+      noHint: 'assets/sounds/127.wav',
+      grab: 'assets/sounds/128.wav',
+      win: 'assets/sounds/129.wav'
     };
-
-    const total = s.wins + s.losses;
-    const rate = total > 0 ? Math.round((s.wins / total) * 100) : 0;
-    const currentStatusText = s.isWinStreak ? `${s.streakCurrent} 胜` : `${s.streakCurrent} 负`;
-
-    const html = `
-      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
-        <div style="font-weight: bold; border-bottom: 1px solid #d0d0d0; padding-bottom: 4px;">
-          当前难度: ${diffNames[currentDiff]}
-        </div>
-        <div style="display: flex; justify-content: space-between;"><span>胜:</span> <strong>${s.wins}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>负:</span> <strong>${s.losses}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>获胜比率:</span> <strong>${rate} %</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>最高得分:</span> <strong>${s.highScore}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>最高连胜:</span> <strong>${s.streakWins}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>最高连负:</span> <strong>${s.streakLosses}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>当前:</span> <strong>${currentStatusText}</strong></div>
-      </div>
-    `;
-
-    this.show({
-      title: '蜘蛛纸牌统计信息',
-      contentHtml: html,
-      buttons: [
-        {
-          text: '重置',
-          onClick: () => {
-            this.showConfirm('重置统计信息', '是否要重置所有游戏统计数据?', () => {
-              if (onReset) onReset();
-            });
-          }
-        },
-        { text: '确定', primary: true }
-      ]
-    });
+    this.preload();
   }
 
-  showAbout() {
-    const html = `
-      <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
-        <div style="font-weight: bold; font-size: 13px;">蜘蛛纸牌 (Spider Solitaire)</div>
-        <div>Windows XP 原版 1:1 纯静态复刻版</div>
-        <div style="color: #444; margin-top: 4px;">(C) 1998-2000 Microsoft Corporation. 保留所有权利。</div>
-        <div style="color: #666; margin-top: 4px;">已完整逆向还原核心算法：MS LCG 洗牌、发牌规则、3级提示队列、原版位图与 6 个 WAV 原声。</div>
-      </div>
-    `;
+  preload() {
+    for (const [key, src] of Object.entries(this.sounds)) {
+      const a = new Audio(src);
+      a.preload = 'auto';
+    }
+  }
 
-    this.show({
-      title: '关于 蜘蛛纸牌',
-      contentHtml: html,
-      buttons: [
-        { text: '确定', primary: true }
-      ]
-    });
+  play(name) {
+    if (!this.enabled) return;
+    try {
+      const src = this.sounds[name];
+      if (!src) return;
+      const audio = new Audio(src);
+      audio.volume = 0.8;
+      audio.play().catch(() => {});
+    } catch (e) {}
+  }
+
+  toggleSound() {
+    this.enabled = !this.enabled;
+    localStorage.setItem('spider_sound', this.enabled ? 'true' : 'false');
+    return this.enabled;
   }
 }
-
 
   // --- src/ui/VictoryAnimation.js ---
 /**
@@ -1119,6 +728,529 @@ class VictoryAnimation {
   };
 }
 
+  // --- src/ui/Renderer.js ---
+/**
+ * Renderer.js
+ * Handles DOM rendering of the 10 tableau columns, cards, stock, foundation, and status bar.
+ * Implements exact 250ms sequential flash hint animation (FUN_01004dfb).
+ */
+
+class Renderer {
+  constructor(game, container) {
+    this.game = game;
+    this.container = container;
+    
+    this.tableauEl = container.querySelector('.tableau-area');
+    this.stockEl = container.querySelector('.stock-area');
+    this.foundationEl = container.querySelector('.foundation-area');
+    this.scoreEl = document.getElementById('status-score');
+    this.movesEl = document.getElementById('status-moves');
+    
+    this.columnEls = [];
+    this.initTableauSlots();
+  }
+
+  initTableauSlots() {
+    this.tableauEl.innerHTML = '';
+    this.columnEls = [];
+    for (let c = 0; c < 10; c++) {
+      const colEl = document.createElement('div');
+      colEl.className = 'tableau-column';
+      colEl.dataset.col = c;
+
+      const slot = document.createElement('div');
+      slot.className = 'column-slot';
+      colEl.appendChild(slot);
+
+      this.tableauEl.appendChild(colEl);
+      this.columnEls.push(colEl);
+    }
+  }
+
+  render() {
+    this.renderColumns();
+    this.renderStock();
+    this.renderFoundation();
+    this.renderStatusBar();
+  }
+
+  renderColumns() {
+    const availableHeight = this.tableauEl.clientHeight || 500;
+    const cardHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--card-height')) || 96;
+
+    for (let c = 0; c < 10; c++) {
+      const colEl = this.columnEls[c];
+      const cards = this.game.columns[c];
+      
+      // Clear previous card elements but retain the empty slot
+      colEl.querySelectorAll('.card-element').forEach(el => el.remove());
+
+      if (cards.length === 0) continue;
+
+      let downCount = 0;
+      let upCount = 0;
+      for (const card of cards) {
+        if (card.faceUp) upCount++;
+        else downCount++;
+      }
+
+      // Windows XP FUN_01005ca9: face-down cards step is 9px (7-9px visible strip)
+      let downStep = 9;
+      let upStep = 22;
+
+      // Auto-compress spacing if column overflows
+      const requiredHeight = downCount * downStep + upCount * upStep + cardHeight;
+      if (requiredHeight > availableHeight - 20 && cards.length > 1) {
+        const scale = (availableHeight - cardHeight - 30) / (downCount * downStep + upCount * upStep);
+        downStep = Math.max(5, Math.floor(downStep * scale));
+        upStep = Math.max(12, Math.floor(upStep * scale));
+      }
+
+      let currentTop = 0;
+      for (let i = 0; i < cards.length; i++) {
+        const card = cards[i];
+        const cardEl = document.createElement('div');
+        cardEl.className = `card-element ${card.faceUp ? 'face-up' : 'face-down'}`;
+        cardEl.dataset.col = c;
+        cardEl.dataset.cardIdx = i;
+        cardEl.dataset.cardId = card.id;
+        cardEl.style.top = `${currentTop}px`;
+        cardEl.style.zIndex = i + 1;
+
+        const img = document.createElement('img');
+        img.src = card.faceUp ? card.faceImage : card.backImage;
+        img.alt = card.faceUp ? `${card.rankName} of ${card.suitName}` : 'Card Back';
+        img.draggable = false;
+        cardEl.appendChild(img);
+
+        if (card.faceUp && this.game.isSequenceMovable(c, i)) {
+          cardEl.classList.add('movable');
+        }
+
+        colEl.appendChild(cardEl);
+        currentTop += card.faceUp ? upStep : downStep;
+      }
+    }
+  }
+
+  renderStock() {
+    this.stockEl.innerHTML = '';
+    const dealsLeft = this.game.stockDealsLeft;
+
+    if (dealsLeft <= 0) {
+      const emptyHint = document.createElement('div');
+      emptyHint.className = 'stock-empty-hint';
+      this.stockEl.appendChild(emptyHint);
+      return;
+    }
+
+    for (let i = 0; i < dealsLeft; i++) {
+      const cardEl = document.createElement('div');
+      cardEl.className = 'stock-card';
+      cardEl.style.left = `${i * 8}px`;
+      cardEl.style.zIndex = i + 1;
+
+      const img = document.createElement('img');
+      img.src = 'assets/ui/CARDBACK.png';
+      img.alt = 'Stock Pile';
+      img.draggable = false;
+      cardEl.appendChild(img);
+
+      this.stockEl.appendChild(cardEl);
+    }
+  }
+
+  renderFoundation() {
+    this.foundationEl.innerHTML = '';
+    const suits = this.game.completedSuits;
+
+    for (let i = 0; i < 8; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'foundation-slot';
+
+      if (i < suits.length) {
+        const suit = suits[i];
+        const kingImgIndex = 1 + suit * 13 + 12; // King card index
+        const img = document.createElement('img');
+        img.src = `assets/cards/CARD${kingImgIndex}.png`;
+        img.alt = `Completed Suit ${i + 1}`;
+        img.draggable = false;
+        slot.appendChild(img);
+      }
+      this.foundationEl.appendChild(slot);
+    }
+  }
+
+  renderStatusBar() {
+    if (this.scoreEl) this.scoreEl.textContent = `分数: ${this.game.score}`;
+    if (this.movesEl) this.movesEl.textContent = `操作: ${this.game.moves}`;
+  }
+
+  /**
+   * Exact 1:1 InvertRect hint animation from FUN_01004dfb:
+   * 1. Invert/highlight source card for 250ms (Sleep 0xfa), un-invert.
+   * 2. Invert/highlight destination card/slot for 250ms (Sleep 0xfa), un-invert.
+   */
+  async playHintAnimation(hint) {
+    this.clearHints();
+    if (!hint) return;
+
+    const fromColEl = this.columnEls[hint.fromCol];
+    const toColEl = this.columnEls[hint.toCol];
+    if (!fromColEl || !toColEl) return;
+
+    const sourceCardEl = fromColEl.querySelector(`[data-card-idx="${hint.cardIndex}"]`);
+    const targetCards = toColEl.querySelectorAll('.card-element');
+    const targetEl = targetCards.length > 0 ? targetCards[targetCards.length - 1] : toColEl.querySelector('.column-slot');
+
+    if (sourceCardEl) {
+      sourceCardEl.classList.add('hint-inverted');
+      await new Promise(r => setTimeout(r, 250)); // 250ms
+      sourceCardEl.classList.remove('hint-inverted');
+    }
+
+    if (targetEl) {
+      targetEl.classList.add('hint-inverted');
+      await new Promise(r => setTimeout(r, 250)); // 250ms
+      targetEl.classList.remove('hint-inverted');
+    }
+  }
+
+  clearHints() {
+    this.tableauEl.querySelectorAll('.hint-inverted, .hinted').forEach(el => {
+      el.classList.remove('hint-inverted', 'hinted');
+    });
+  }
+}
+
+  // --- src/ui/Dialogs.js ---
+/**
+ * Dialogs.js
+ * 1:1 Pixel-Perfect Windows XP Dialog Templates (RT_DIALOG: 107, 117, 118, 119, 130)
+ * Reconstructed directly from PE DLGTEMPLATEEX structures in spri.exe.
+ */
+
+class Dialogs {
+  constructor() {
+    this.overlay = document.getElementById('dialog-overlay');
+    this.dialogTitle = document.getElementById('dialog-title');
+    this.dialogContent = document.getElementById('dialog-content');
+    this.dialogFooter = document.getElementById('dialog-footer');
+    this.closeBtn = document.getElementById('dialog-close-btn');
+
+    this.closeBtn.addEventListener('click', () => this.hide());
+  }
+
+  show({ title, width, contentHtml, buttons }) {
+    this.dialogTitle.textContent = title || '蜘蛛纸牌';
+    const box = document.getElementById('xp-dialog-box');
+    if (box) {
+      box.style.width = width ? `${width}px` : 'auto';
+    }
+    this.dialogContent.innerHTML = contentHtml || '';
+    this.dialogFooter.innerHTML = '';
+
+    buttons.forEach(btn => {
+      const b = document.createElement('button');
+      b.className = `xp-btn ${btn.primary ? 'primary' : ''}`;
+      b.textContent = btn.text;
+      b.addEventListener('click', () => {
+        if (btn.onClick) btn.onClick();
+        this.hide();
+      });
+      this.dialogFooter.appendChild(b);
+    });
+
+    this.overlay.classList.add('show');
+  }
+
+  hide() {
+    this.overlay.classList.remove('show');
+  }
+
+  showAlert(title, message) {
+    this.show({
+      title,
+      width: 280,
+      contentHtml: `<div style="padding: 6px 0; font-size: 12px;">${message}</div>`,
+      buttons: [
+        { text: '确定', primary: true }
+      ]
+    });
+  }
+
+  showConfirm(title, message, onConfirm) {
+    this.show({
+      title,
+      width: 280,
+      contentHtml: `<div style="padding: 6px 0; font-size: 12px;">${message}</div>`,
+      buttons: [
+        { text: '是(&Y)', primary: true, onClick: onConfirm },
+        { text: '否(&N)' }
+      ]
+    });
+  }
+
+  /**
+   * DIALOG 119: 难易级别 (Size: 197 x 109, Font: 宋体 9pt)
+   * Items: 1008 (初级单色), 1009 (中级双色), 1010 (高级四色) with suit icons
+   */
+  showDifficulty(currentDiff, onSelect) {
+    const html = `
+      <div style="font-size: 12px; color: #000000; padding: 2px 0;">
+        <div style="margin-bottom: 10px;">请选择游戏的难易级别:</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- 初级: 单色 (黑桃 123) -->
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="diff_choice" value="1" ${currentDiff === 1 ? 'checked' : ''}>
+            <div style="display: flex; align-items: center; gap: 2px;">
+              <img src="assets/ui/icon_123.png" style="width:16px;height:16px;" alt="黑桃">
+            </div>
+            <span>初级(&E): 单色</span>
+          </label>
+
+          <!-- 中级: 双色 (黑桃 123, 红桃 122) -->
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="diff_choice" value="2" ${currentDiff === 2 ? 'checked' : ''}>
+            <div style="display: flex; align-items: center; gap: 2px;">
+              <img src="assets/ui/icon_123.png" style="width:16px;height:16px;" alt="黑桃">
+              <img src="assets/ui/icon_122.png" style="width:16px;height:16px;" alt="红桃">
+            </div>
+            <span>中级(&M): 双色</span>
+          </label>
+
+          <!-- 高级: 四色 (黑桃 123, 红桃 122, 梅花 120, 方块 121) -->
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="diff_choice" value="4" ${currentDiff === 4 ? 'checked' : ''}>
+            <div style="display: flex; align-items: center; gap: 2px;">
+              <img src="assets/ui/icon_123.png" style="width:16px;height:16px;" alt="黑桃">
+              <img src="assets/ui/icon_122.png" style="width:16px;height:16px;" alt="红桃">
+              <img src="assets/ui/icon_120.png" style="width:16px;height:16px;" alt="梅花">
+              <img src="assets/ui/icon_121.png" style="width:16px;height:16px;" alt="方块">
+            </div>
+            <span>高级(&D): 四色</span>
+          </label>
+        </div>
+      </div>
+    `;
+
+    this.show({
+      title: '难易级别',
+      width: 320,
+      contentHtml: html,
+      buttons: [
+        {
+          text: '确定',
+          primary: true,
+          onClick: () => {
+            const selected = document.querySelector('input[name="diff_choice"]:checked');
+            if (selected && onSelect) {
+              onSelect(parseInt(selected.value));
+            }
+          }
+        },
+        { text: '取消' }
+      ]
+    });
+  }
+
+  /**
+   * DIALOG 117: 蜘蛛选项 (Size: 199 x 140, Font: 宋体 9pt)
+   * 6 checkboxes matching items 1001-1006
+   */
+  showOptions(options, onSave) {
+    const html = `
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #000000;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="opt-anim" ${options.animDeal ? 'checked' : ''}>
+          <span>发牌时进行动画处理(&A)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="opt-save-exit" ${options.saveOnExit ? 'checked' : ''}>
+          <span>退出时自动保存游戏(&S)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="opt-load-start" ${options.loadAtStart ? 'checked' : ''}>
+          <span>启动时自动打开上次游戏(&O)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="opt-prompt-save" ${options.promptSave ? 'checked' : ''}>
+          <span>保存游戏前提示(&P)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="opt-prompt-load" ${options.promptLoad ? 'checked' : ''}>
+          <span>打开已保存的游戏前提示(&B)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="opt-sound" ${options.sound ? 'checked' : ''}>
+          <span>使用声音效果(&E)</span>
+        </label>
+      </div>
+    `;
+
+    this.show({
+      title: '蜘蛛选项',
+      width: 290,
+      contentHtml: html,
+      buttons: [
+        {
+          text: '确定',
+          primary: true,
+          onClick: () => {
+            const newOpts = {
+              animDeal: document.getElementById('opt-anim').checked,
+              saveOnExit: document.getElementById('opt-save-exit').checked,
+              loadAtStart: document.getElementById('opt-load-start').checked,
+              promptSave: document.getElementById('opt-prompt-save').checked,
+              promptLoad: document.getElementById('opt-prompt-load').checked,
+              sound: document.getElementById('opt-sound').checked
+            };
+            if (onSave) onSave(newOpts);
+          }
+        },
+        { text: '取消' }
+      ]
+    });
+  }
+
+  /**
+   * DIALOG 118: 蜘蛛统计数据 (Size: 167 x 198, Font: 宋体 9pt)
+   * TabControl: 初级, 中级, 高级
+   * GroupBoxes: 最高记录, 百分比, 连续
+   */
+  showStats(allStats, initialDiff, onReset) {
+    const diffKeys = ['Easy', 'Medium', 'Difficult'];
+    const diffTitles = ['初级', '中级', '高级'];
+    let curIndex = initialDiff === 1 ? 0 : (initialDiff === 2 ? 1 : 2);
+
+    const renderTabContent = (idx) => {
+      const key = diffKeys[idx];
+      const s = allStats[key] || { highScore: 0, wins: 0, losses: 0, streakWins: 0, streakLosses: 0, streakCurrent: 0, isWinStreak: true };
+      const total = s.wins + s.losses;
+      const rate = total > 0 ? Math.round((s.wins / total) * 100) : 0;
+      const currentText = s.isWinStreak ? `${s.streakCurrent} 胜` : `${s.streakCurrent} 负`;
+
+      return `
+        <!-- Tabs -->
+        <div class="xp-tabs">
+          ${diffTitles.map((t, i) => `
+            <div class="xp-tab ${i === idx ? 'active' : ''}" data-tab-idx="${i}">${t}</div>
+          `).join('')}
+        </div>
+
+        <!-- Group 1: 最高记录 -->
+        <div class="xp-groupbox">
+          <span class="xp-groupbox-title">最高记录</span>
+          <div style="display:flex; justify-content:space-between; margin-top:4px;">
+            <span>得分:</span>
+            <strong>${s.highScore}</strong>
+          </div>
+        </div>
+
+        <!-- Group 2: 百分比 -->
+        <div class="xp-groupbox">
+          <span class="xp-groupbox-title">百分比</span>
+          <div style="display:flex; justify-content:space-between; margin-top:2px;"><span>胜:</span> <strong>${s.wins}</strong></div>
+          <div style="display:flex; justify-content:space-between; margin-top:2px;"><span>负:</span> <strong>${s.losses}</strong></div>
+          <div style="display:flex; justify-content:space-between; margin-top:2px;"><span>获胜比率:</span> <strong>${rate} %</strong></div>
+        </div>
+
+        <!-- Group 3: 连续 -->
+        <div class="xp-groupbox">
+          <span class="xp-groupbox-title">连续</span>
+          <div style="display:flex; justify-content:space-between; margin-top:2px;"><span>最高连胜:</span> <strong>${s.streakWins}</strong></div>
+          <div style="display:flex; justify-content:space-between; margin-top:2px;"><span>最高连负:</span> <strong>${s.streakLosses}</strong></div>
+          <div style="display:flex; justify-content:space-between; margin-top:2px;"><span>当前:</span> <strong>${currentText}</strong></div>
+        </div>
+      `;
+    };
+
+    const updateContainer = () => {
+      this.dialogContent.innerHTML = renderTabContent(curIndex);
+      this.dialogContent.querySelectorAll('.xp-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+          curIndex = parseInt(e.target.dataset.tabIdx);
+          updateContainer();
+        });
+      });
+    };
+
+    this.show({
+      title: '蜘蛛统计数据',
+      width: 290,
+      contentHtml: renderTabContent(curIndex),
+      buttons: [
+        {
+          text: '确定',
+          primary: true
+        },
+        {
+          text: '复位(&R)',
+          onClick: () => {
+            this.showConfirm('重置统计信息', '是否要重置所有游戏统计数据?', () => {
+              if (onReset) onReset();
+            });
+          }
+        }
+      ]
+    });
+
+    this.dialogContent.querySelectorAll('.xp-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        curIndex = parseInt(e.target.dataset.tabIdx);
+        updateContainer();
+      });
+    });
+  }
+
+  /**
+   * DIALOG 130: 游戏结束 (Size: 166 x 69, Font: 宋体 9pt)
+   */
+  showWin(score, moves, onPlayAgain) {
+    const html = `
+      <div style="font-size: 12px; color: #000000; padding: 4px 0;">
+        <div style="font-weight: bold; font-size: 13px; color: #003399; margin-bottom: 6px;">恭喜恭喜，你赢了!</div>
+        <div>最终得分: <strong>${score}</strong></div>
+        <div>操作次数: <strong>${moves}</strong></div>
+        <div style="margin-top: 8px;">是否开始新一轮游戏?</div>
+      </div>
+    `;
+
+    this.show({
+      title: '游戏结束',
+      width: 260,
+      contentHtml: html,
+      buttons: [
+        { text: '是(&Y)', primary: true, onClick: onPlayAgain },
+        { text: '否(&N)' }
+      ]
+    });
+  }
+
+  /**
+   * DIALOG 107: 关于蜘蛛 (Size: 253 x 189, Font: 宋体 9pt)
+   * Uses original 106.png bitmap graphic
+   */
+  showAbout() {
+    const html = `
+      <div style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;">
+        <img src="assets/ui/106.png" style="max-width: 100%; height: auto; border: 1px solid #716f64;" alt="蜘蛛">
+        <div style="font-weight: bold; font-size: 13px; margin-top: 4px;">蜘蛛纸牌 (Spider Solitaire)</div>
+        <div style="font-size: 11px; color: #333333;">Windows XP 经典 1:1 纯静态复刻版</div>
+        <div style="font-size: 11px; color: #666666;">(C) 1998-2000 Microsoft Corporation. 保留所有权利。</div>
+      </div>
+    `;
+
+    this.show({
+      title: '关于蜘蛛',
+      width: 320,
+      contentHtml: html,
+      buttons: [
+        { text: '确定', primary: true }
+      ]
+    });
+  }
+}
 
   // --- src/ui/Interaction.js ---
 /**
@@ -1142,7 +1274,7 @@ class Interaction {
     this.victoryAnim = victoryAnim;
 
     this.dragLayer = document.getElementById('drag-layer');
-    this.bottomHintBtn = document.getElementById('bottom-hint-btn');
+    this.bottomHintBtn = document.getElementById('board-scoreboard') || document.getElementById('bottom-hint-btn');
 
     this.activeDrag = null;
     this.peekingEl = null;
@@ -1519,7 +1651,6 @@ class Interaction {
   }
 }
 
-
   // --- src/main.js ---
 /**
  * main.js
@@ -1528,17 +1659,12 @@ class Interaction {
  */
 
 
-
-
-
-
-
-
-
 class App {
   constructor() {
     this.stats = this.loadStats();
+    this.options = this.loadOptions();
     this.audio = new AudioService();
+    this.audio.soundEnabled = this.options.sound;
     this.dialogs = new Dialogs();
     this.victoryAnim = new VictoryAnimation();
 
@@ -1554,8 +1680,10 @@ class App {
     this.bindShortcuts();
     this.bindPersistence();
 
-    // Check if auto-saved game exists on launch
-    this.tryRestoreAutoSavedGame();
+    // Check if auto-saved game exists on launch (if enabled in options)
+    if (this.options.loadAtStart) {
+      this.tryRestoreAutoSavedGame();
+    }
 
     // Hook game events
     this.game.onChange((event, data) => {
@@ -1570,6 +1698,25 @@ class App {
     });
 
     this.renderer.render();
+  }
+
+  loadOptions() {
+    try {
+      const data = localStorage.getItem('spider_options');
+      if (data) return JSON.parse(data);
+    } catch (e) {}
+    return {
+      animDeal: true,
+      saveOnExit: true,
+      loadAtStart: true,
+      promptSave: true,
+      promptLoad: true,
+      sound: true
+    };
+  }
+
+  saveOptions() {
+    localStorage.setItem('spider_options', JSON.stringify(this.options));
   }
 
   getDiffKey(diff = this.game.difficulty) {
@@ -1701,7 +1848,7 @@ class App {
   bindPersistence() {
     // Auto-save on page close / refresh (FUN_0100411f: SaveOnExit)
     window.addEventListener('beforeunload', () => {
-      if (this.game.moves > 0 && !this.game.isWon) {
+      if (this.options.saveOnExit && this.game.moves > 0 && !this.game.isWon) {
         this.saveCurrentGame();
       }
     });
@@ -1743,7 +1890,7 @@ class App {
     if (btnClose) {
       btnClose.addEventListener('click', () => {
         this.dialogs.showConfirm('退出', '是否退出蜘蛛纸牌?', () => {
-          if (this.game.moves > 0 && !this.game.isWon) {
+          if (this.options.saveOnExit && this.game.moves > 0 && !this.game.isWon) {
             this.saveCurrentGame();
           }
           window.close();
@@ -1760,7 +1907,9 @@ class App {
         e.stopPropagation();
         const isActive = item.classList.contains('active');
         menuItems.forEach(m => m.classList.remove('active'));
-        if (!isActive) item.classList.add('active');
+        if (!isActive && !item.hasAttribute('data-action')) {
+          item.classList.add('active');
+        }
       });
     });
 
@@ -1795,19 +1944,37 @@ class App {
         }
       },
       'save-game': () => {
-        const ok = this.saveCurrentGame();
-        if (ok) {
-          this.dialogs.showAlert('保存游戏', '游戏已成功保存。');
+        const doSave = () => {
+          const ok = this.saveCurrentGame();
+          if (ok) {
+            this.dialogs.showAlert('保存游戏', '游戏已成功保存。');
+          } else {
+            this.dialogs.showAlert('保存游戏', '无法保存游戏。');
+          }
+        };
+
+        if (this.options.promptSave) {
+          this.dialogs.showConfirm('保存游戏', '是否保存当前游戏进度?', () => {
+            doSave();
+          });
         } else {
-          this.dialogs.showAlert('保存游戏', '无法保存游戏。');
+          doSave();
         }
       },
       'load-game': () => {
         if (localStorage.getItem('spider_saved_game')) {
-          this.dialogs.showConfirm('打开游戏', '是否放弃当前正在玩的游戏，加载上次保存的游戏?', () => {
+          const doLoad = () => {
             const ok = this.loadSavedGame();
             if (!ok) this.dialogs.showAlert('打开游戏', '无法加载游戏。');
-          });
+          };
+
+          if (this.options.promptLoad) {
+            this.dialogs.showConfirm('打开游戏', '是否放弃当前正在玩的游戏，加载上次保存的游戏?', () => {
+              doLoad();
+            });
+          } else {
+            doLoad();
+          }
         } else {
           this.dialogs.showAlert('打开游戏', '没有找到保存的游戏。');
         }
@@ -1844,10 +2011,17 @@ class App {
           this.dialogs.hide();
         });
       },
+      'options': () => {
+        this.dialogs.showOptions(this.options, (newOpts) => {
+          this.options = { ...this.options, ...newOpts };
+          this.saveOptions();
+          this.audio.soundEnabled = this.options.sound;
+        });
+      },
       'sound-toggle': () => {
         const enabled = this.audio.toggleSound();
-        const soundLabel = document.getElementById('menu-sound-check');
-        if (soundLabel) soundLabel.textContent = enabled ? '✓ ' : '   ';
+        this.options.sound = enabled;
+        this.saveOptions();
       },
       'rules': () => {
         this.dialogs.showAlert(
@@ -1861,6 +2035,14 @@ class App {
       },
       'about': () => {
         this.dialogs.showAbout();
+      },
+      'exit': () => {
+        this.dialogs.showConfirm('退出', '是否退出蜘蛛纸牌?', () => {
+          if (this.options.saveOnExit && this.game.moves > 0 && !this.game.isWon) {
+            this.saveCurrentGame();
+          }
+          window.close();
+        });
       }
     };
 
@@ -1876,10 +2058,34 @@ class App {
 
   bindShortcuts() {
     window.addEventListener('keydown', async (e) => {
+      // F1: Rules / Help Topics
+      if (e.key === 'F1') {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="rules"]');
+        if (action) action.click();
+      }
       // F2: New Game
-      if (e.key === 'F2') {
+      else if (e.key === 'F2') {
         e.preventDefault();
         const action = document.querySelector('[data-action="new-game"]');
+        if (action) action.click();
+      }
+      // F3: Difficulty
+      else if (e.key === 'F3') {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="difficulty"]');
+        if (action) action.click();
+      }
+      // F4: Stats
+      else if (e.key === 'F4') {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="stats"]');
+        if (action) action.click();
+      }
+      // F5: Options
+      else if (e.key === 'F5') {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="options"]');
         if (action) action.click();
       }
       // Ctrl+Z / Cmd+Z: Undo
@@ -1914,12 +2120,6 @@ class App {
         e.preventDefault();
         this.interaction.handleStockClick();
       }
-      // F4: Stats
-      else if (e.key === 'F4') {
-        e.preventDefault();
-        const action = document.querySelector('[data-action="stats"]');
-        if (action) action.click();
-      }
       // Escape: Boss Key (FUN_01006db6) or close dialog
       else if (e.key === 'Escape') {
         if (this.dialogs.overlay.classList.contains('show')) {
@@ -1935,6 +2135,5 @@ class App {
 document.addEventListener('DOMContentLoaded', () => {
   window.spiderApp = new App();
 });
-
 
 })();

@@ -19,7 +19,7 @@ export class Interaction {
     this.victoryAnim = victoryAnim;
 
     this.dragLayer = document.getElementById('drag-layer');
-    this.bottomHintBtn = document.getElementById('bottom-hint-btn');
+    this.bottomHintBtn = document.getElementById('board-scoreboard') || document.getElementById('bottom-hint-btn');
 
     this.activeDrag = null;
     this.peekingEl = null;

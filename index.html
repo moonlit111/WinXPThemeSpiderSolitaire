@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>蜘蛛纸牌 - Windows XP 经典复刻</title>
+  <title>蜘蛛纸牌</title>
   <link rel="icon" type="image/png" href="assets/ui/spider_icon.png">
   <link rel="stylesheet" href="styles/winxp.css">
   <link rel="stylesheet" href="styles/game.css">
 </head>
 <body>
 
-  <!-- Windows XP Window Shell -->
+  <!-- Windows XP Window Frame -->
   <div class="xp-window">
     
     <!-- Title Bar -->
@@ -26,68 +26,77 @@
       </div>
     </div>
 
-    <!-- Classic Menu Bar -->
+    <!-- Classic Menu Bar (RT_MENU 101: 游戏, 发牌, 帮助) -->
     <div class="xp-menubar">
-      <!-- 游戏(G) -->
+      <!-- 游戏(&G) -->
       <div class="xp-menu-item">
         <span><u>游</u>戏(G)</span>
         <div class="xp-menu-dropdown">
           <div class="xp-dropdown-row" data-action="new-game">
-            <span>新游戏(<u>N</u>)</span>
+            <span>开局(<u>N</u>)</span>
             <span class="xp-dropdown-shortcut">F2</span>
           </div>
           <div class="xp-dropdown-row" data-action="restart">
-            <span>重新开始这次游戏(<u>R</u>)</span>
+            <span>重新开局(<u>R</u>)</span>
           </div>
           <div class="xp-dropdown-separator"></div>
           <div class="xp-dropdown-row" data-action="undo">
             <span>撤销(<u>U</u>)</span>
             <span class="xp-dropdown-shortcut">Ctrl+Z</span>
           </div>
-          <div class="xp-dropdown-row" data-action="save-game">
-            <span>保存游戏(<u>S</u>)</span>
-            <span class="xp-dropdown-shortcut">Ctrl+S</span>
-          </div>
-          <div class="xp-dropdown-row" data-action="load-game">
-            <span>打开保存的游戏(<u>O</u>)...</span>
-            <span class="xp-dropdown-shortcut">Ctrl+O</span>
-          </div>
           <div class="xp-dropdown-row" data-action="deal">
-            <span>发牌(<u>D</u>)</span>
+            <span>新一轮发牌(<u>D</u>)</span>
             <span class="xp-dropdown-shortcut">D</span>
           </div>
           <div class="xp-dropdown-row" data-action="hint">
-            <span>显示可行的移动(<u>M</u>)</span>
-            <span class="xp-dropdown-shortcut">H</span>
+            <span>显示可行的操作(<u>M</u>)</span>
+            <span class="xp-dropdown-shortcut">M</span>
           </div>
           <div class="xp-dropdown-separator"></div>
           <div class="xp-dropdown-row" data-action="difficulty">
-            <span>难易度(<u>D</u>)...</span>
+            <span>难易级别(<u>I</u>)...</span>
+            <span class="xp-dropdown-shortcut">F3</span>
           </div>
           <div class="xp-dropdown-row" data-action="stats">
-            <span>统计信息(<u>S</u>)...</span>
+            <span>战况(<u>T</u>)...</span>
             <span class="xp-dropdown-shortcut">F4</span>
           </div>
-          <div class="xp-dropdown-row" data-action="sound-toggle">
-            <span><span id="menu-sound-check">✓ </span>声音(<u>S</u>)</span>
+          <div class="xp-dropdown-row" data-action="options">
+            <span>选项(<u>P</u>)...</span>
+            <span class="xp-dropdown-shortcut">F5</span>
           </div>
           <div class="xp-dropdown-separator"></div>
-          <div class="xp-dropdown-row" data-action="new-game">
+          <div class="xp-dropdown-row" data-action="save-game">
+            <span>保存本次游戏(<u>S</u>)</span>
+            <span class="xp-dropdown-shortcut">Ctrl+S</span>
+          </div>
+          <div class="xp-dropdown-row" data-action="load-game">
+            <span>打开上次保存的游戏(<u>O</u>)...</span>
+            <span class="xp-dropdown-shortcut">Ctrl+O</span>
+          </div>
+          <div class="xp-dropdown-separator"></div>
+          <div class="xp-dropdown-row" data-action="exit">
             <span>退出(<u>X</u>)</span>
           </div>
         </div>
       </div>
 
-      <!-- 帮助(H) -->
+      <!-- 发牌(&D) - Direct menu bar trigger from RT_MENU 101 -->
+      <div class="xp-menu-item" id="menu-deal-direct" data-action="deal" style="cursor: pointer;">
+        <span><u>发</u>牌(D)</span>
+      </div>
+
+      <!-- 帮助(&H) -->
       <div class="xp-menu-item">
         <span><u>帮</u>助(H)</span>
         <div class="xp-menu-dropdown">
           <div class="xp-dropdown-row" data-action="rules">
-            <span>规则与说明(<u>C</u>)</span>
+            <span>目录(<u>C</u>)</span>
+            <span class="xp-dropdown-shortcut">F1</span>
           </div>
           <div class="xp-dropdown-separator"></div>
           <div class="xp-dropdown-row" data-action="about">
-            <span>关于 蜘蛛纸牌(<u>A</u>)...</span>
+            <span>关于蜘蛛(<u>A</u>)...</span>
           </div>
         </div>
       </div>
@@ -95,15 +104,25 @@
 
     <!-- Main Game Board on Felt -->
     <div id="game-container" class="game-container">
-      <!-- 10 Tableau Columns -->
+      <!-- 10 Tableau Columns (FUN_01005ca9) -->
       <div class="tableau-area"></div>
 
-      <!-- Bottom Bar: Foundations (Left) & Stock Pile (Right) -->
+      <!-- Bottom Bar: Foundations (Left), Scoreboard (Center), Stock (Right) -->
       <div class="bottom-area">
         <div class="foundation-area" title="已完成的花色牌组"></div>
-        <div class="bottom-hint-area" id="bottom-hint-btn" title="点击获取走法提示 (H)">
-          <span class="bottom-hint-label">提示 (H)</span>
+        
+        <!-- 1:1 Windows XP Green Scoreboard (FUN_01004a10 / FUN_01003811) -->
+        <div class="xp-scoreboard" id="board-scoreboard" title="点击显示可行的操作 (M)">
+          <div class="xp-score-row">
+            <span class="xp-score-label">分数:</span>
+            <span class="xp-score-val" id="status-score">500</span>
+          </div>
+          <div class="xp-score-row">
+            <span class="xp-score-label">操作:</span>
+            <span class="xp-score-val" id="status-moves">0</span>
+          </div>
         </div>
+
         <div class="stock-area" title="点击发新一轮牌 (D)"></div>
       </div>
 
@@ -111,23 +130,15 @@
       <canvas id="victory-canvas"></canvas>
     </div>
 
-    <!-- Status Bar -->
-    <div class="xp-statusbar">
-      <div class="xp-status-pane" id="status-score">分数: 500</div>
-      <div class="xp-status-pane grow"></div>
-      <div class="xp-status-pane" id="status-moves">操作: 0</div>
-    </div>
-
     <!-- Classic XP Modal Dialog Component -->
     <div class="xp-dialog-overlay" id="dialog-overlay">
-      <div class="xp-dialog">
+      <div class="xp-dialog" id="xp-dialog-box">
         <div class="xp-dialog-titlebar">
           <span id="dialog-title">蜘蛛纸牌</span>
           <button class="xp-btn-title xp-btn-close" id="dialog-close-btn" style="width:16px;height:16px;font-size:9px;">r</button>
         </div>
-        <div class="xp-dialog-body">
-          <img class="xp-dialog-icon" id="dialog-icon" src="assets/ui/spider_icon.png" alt="Dialog Icon">
-          <div class="xp-dialog-content" id="dialog-content"></div>
+        <div class="xp-dialog-body" id="dialog-body">
+          <div id="dialog-content"></div>
         </div>
         <div class="xp-dialog-footer" id="dialog-footer"></div>
       </div>
@@ -138,7 +149,7 @@
   <!-- Layer for dragging cards with high z-index -->
   <div id="drag-layer"></div>
 
-  <!-- Entry Script -->
+  <!-- Distribution Script -->
   <script src="dist/spider.bundle.js"></script>
 </body>
 </html>

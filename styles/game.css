@@ -1,16 +1,9 @@
-/* Spider Solitaire Game Board & Card Styles */
+/* Spider Solitaire Game Board & Card Styles - 1:1 Pixel-Perfect Recreation */
 
 :root {
   --card-width: 71px;
   --card-height: 96px;
-  --card-radius: 4px;
-}
-
-@media (min-width: 1000px) and (min-height: 700px) {
-  :root {
-    --card-width: 80px;
-    --card-height: 108px;
-  }
+  --card-radius: 3px;
 }
 
 .game-container {
@@ -22,17 +15,17 @@
   background-image: url('../assets/ui/FELT.png');
   background-repeat: repeat;
   overflow: hidden;
-  padding: 10px 16px;
+  padding: 10px 14px 8px 14px;
 }
 
-/* 10 Tableau Columns Area */
+/* 10 Tableau Columns Area (FUN_01005ca9) */
 .tableau-area {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(10, 1fr);
-  gap: 8px;
+  gap: 6px;
   position: relative;
-  min-height: 380px;
+  min-height: 420px;
 }
 
 .tableau-column {
@@ -43,7 +36,7 @@
   align-items: center;
 }
 
-/* Empty Column Slot Outline */
+/* Empty Column Slot Outline (Resource ID 108 / 108.png) */
 .column-slot {
   width: var(--card-width);
   height: var(--card-height);
@@ -51,24 +44,22 @@
   top: 0;
   border-radius: var(--card-radius);
   background-image: url('../assets/ui/108.png');
-  background-size: cover;
-  opacity: 0.85;
+  background-size: 100% 100%;
   pointer-events: none;
 }
 
-/* Card Element */
+/* Card Element (71px x 96px - FUN_01002899) */
 .card-element {
   width: var(--card-width);
   height: var(--card-height);
   position: absolute;
   border-radius: var(--card-radius);
-  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.45);
   background-color: #ffffff;
   cursor: pointer;
-  transition: transform 0.15s ease, filter 0.15s ease;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   touch-action: none;
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 .card-element img {
@@ -83,28 +74,33 @@
   cursor: default;
 }
 
-.card-element.movable:hover {
-  filter: brightness(1.06);
+/* 1:1 Windows GDI InvertRect Selection */
+.card-element.selected-inverted,
+.card-element.selected-inverted img,
+.drag-group.selected-inverted,
+.drag-group.selected-inverted .card-element,
+.drag-group.selected-inverted img,
+.hint-inverted,
+.hint-inverted img {
+  filter: invert(1) !important;
+  -webkit-filter: invert(1) !important;
+  z-index: 9999 !important;
 }
 
-.card-element.hinted {
-  outline: 3px solid #ffea00;
-  box-shadow: 0 0 12px #ffea00;
-  animation: hint-pulse 0.8s infinite alternate ease-in-out;
+/* Right-click peek state (FUN_01003712) */
+.card-element.peeking {
+  transform: translateY(-8px) scale(1.05);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.6);
+  z-index: 9998 !important;
 }
 
-@keyframes hint-pulse {
-  0% { transform: translateY(0px) scale(1); }
-  100% { transform: translateY(-4px) scale(1.04); }
-}
-
-/* Bottom Deck / Foundation Area */
+/* Bottom Deck, Scoreboard & Foundation Area */
 .bottom-area {
-  height: calc(var(--card-height) + 12px);
+  height: calc(var(--card-height) + 6px);
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  padding: 4px 10px;
+  align-items: center;
+  padding: 0 6px;
   position: relative;
   z-index: 10;
 }
@@ -112,9 +108,10 @@
 /* Foundation (Left): 8 completed suits */
 .foundation-area {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   height: var(--card-height);
   align-items: center;
+  width: calc(var(--card-width) * 2);
 }
 
 .foundation-slot {
@@ -129,6 +126,44 @@
   height: 100%;
   border-radius: var(--card-radius);
   box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* 1:1 Authentic Windows XP Green Scoreboard (FUN_01004a10 / FUN_01003811) */
+.xp-scoreboard {
+  width: 200px;
+  height: 56px;
+  background-color: #007f00;
+  border: 1px solid #000000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 16px;
+  color: #ffffff;
+  font-family: 'SimSun', '宋体', 'Tahoma', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.2);
+  line-height: 1.6;
+}
+
+.xp-scoreboard:hover {
+  filter: brightness(1.08);
+}
+
+.xp-score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.xp-score-label {
+  font-weight: normal;
+}
+
+.xp-score-val {
+  font-weight: normal;
+  text-align: right;
+  min-width: 40px;
 }
 
 /* Stock Pile (Right): 5 deals of 10 cards */
@@ -202,73 +237,4 @@
   pointer-events: none;
   z-index: 5000;
   display: none;
-}
-
-/* Windows GDI InvertRect 1:1 Recreation */
-.hint-inverted {
-  filter: invert(1) !important;
-  z-index: 9999 !important;
-}
-
-/* Right-click peek state */
-.card-element.peeking {
-  transform: translateY(-8px) scale(1.05);
-  box-shadow: 0 8px 16px rgba(0,0,0,0.6);
-  z-index: 9998 !important;
-}
-
-/* 1:1 Windows GDI InvertRect Selection */
-.card-element.selected-inverted,
-.card-element.selected-inverted img,
-.drag-group.selected-inverted,
-.drag-group.selected-inverted .card-element,
-.drag-group.selected-inverted img {
-  filter: invert(1) !important;
-  -webkit-filter: invert(1) !important;
-}
-
-.bottom-hint-area {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 0.2s ease;
-}
-
-.bottom-hint-area:hover {
-  opacity: 1;
-}
-
-.bottom-hint-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  padding: 4px 12px;
-  border-radius: 12px;
-  pointer-events: none;
-}
-
-.bottom-hint-area:hover .bottom-hint-label {
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.1);
-}
-
-/* Card deal flight animation */
-@keyframes card-deal-fly {
-  from {
-    transform: translate(calc(var(--deal-from-x, 200px) - var(--deal-to-x, 0px)), calc(var(--deal-from-y, 400px) - var(--deal-to-y, 0px))) scale(0.9);
-    opacity: 0.8;
-  }
-  to {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-}
-
-.card-element.dealing-in {
-  animation: card-deal-fly 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }

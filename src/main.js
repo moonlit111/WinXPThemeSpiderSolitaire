@@ -15,7 +15,9 @@ import { Interaction } from './ui/Interaction.js';
 class App {
   constructor() {
     this.stats = this.loadStats();
+    this.options = this.loadOptions();
     this.audio = new AudioService();
+    this.audio.soundEnabled = this.options.sound;
     this.dialogs = new Dialogs();
     this.victoryAnim = new VictoryAnimation();
 
@@ -31,8 +33,10 @@ class App {
     this.bindShortcuts();
     this.bindPersistence();
 
-    // Check if auto-saved game exists on launch
-    this.tryRestoreAutoSavedGame();
+    // Check if auto-saved game exists on launch (if enabled in options)
+    if (this.options.loadAtStart) {
+      this.tryRestoreAutoSavedGame();
+    }
 
     // Hook game events
     this.game.onChange((event, data) => {
@@ -47,6 +51,25 @@ class App {
     });
 
     this.renderer.render();
+  }
+
+  loadOptions() {
+    try {
+      const data = localStorage.getItem('spider_options');
+      if (data) return JSON.parse(data);
+    } catch (e) {}
+    return {
+      animDeal: true,
+      saveOnExit: true,
+      loadAtStart: true,
+      promptSave: true,
+      promptLoad: true,
+      sound: true
+    };
+  }
+
+  saveOptions() {
+    localStorage.setItem('spider_options', JSON.stringify(this.options));
   }
 
   getDiffKey(diff = this.game.difficulty) {
@@ -178,7 +201,7 @@ class App {
   bindPersistence() {
     // Auto-save on page close / refresh (FUN_0100411f: SaveOnExit)
     window.addEventListener('beforeunload', () => {
-      if (this.game.moves > 0 && !this.game.isWon) {
+      if (this.options.saveOnExit && this.game.moves > 0 && !this.game.isWon) {
         this.saveCurrentGame();
       }
     });
@@ -220,7 +243,7 @@ class App {
     if (btnClose) {
       btnClose.addEventListener('click', () => {
         this.dialogs.showConfirm('退出', '是否退出蜘蛛纸牌?', () => {
-          if (this.game.moves > 0 && !this.game.isWon) {
+          if (this.options.saveOnExit && this.game.moves > 0 && !this.game.isWon) {
             this.saveCurrentGame();
           }
           window.close();
@@ -237,7 +260,9 @@ class App {
         e.stopPropagation();
         const isActive = item.classList.contains('active');
         menuItems.forEach(m => m.classList.remove('active'));
-        if (!isActive) item.classList.add('active');
+        if (!isActive && !item.hasAttribute('data-action')) {
+          item.classList.add('active');
+        }
       });
     });
 
@@ -272,19 +297,37 @@ class App {
         }
       },
       'save-game': () => {
-        const ok = this.saveCurrentGame();
-        if (ok) {
-          this.dialogs.showAlert('保存游戏', '游戏已成功保存。');
+        const doSave = () => {
+          const ok = this.saveCurrentGame();
+          if (ok) {
+            this.dialogs.showAlert('保存游戏', '游戏已成功保存。');
+          } else {
+            this.dialogs.showAlert('保存游戏', '无法保存游戏。');
+          }
+        };
+
+        if (this.options.promptSave) {
+          this.dialogs.showConfirm('保存游戏', '是否保存当前游戏进度?', () => {
+            doSave();
+          });
         } else {
-          this.dialogs.showAlert('保存游戏', '无法保存游戏。');
+          doSave();
         }
       },
       'load-game': () => {
         if (localStorage.getItem('spider_saved_game')) {
-          this.dialogs.showConfirm('打开游戏', '是否放弃当前正在玩的游戏，加载上次保存的游戏?', () => {
+          const doLoad = () => {
             const ok = this.loadSavedGame();
             if (!ok) this.dialogs.showAlert('打开游戏', '无法加载游戏。');
-          });
+          };
+
+          if (this.options.promptLoad) {
+            this.dialogs.showConfirm('打开游戏', '是否放弃当前正在玩的游戏，加载上次保存的游戏?', () => {
+              doLoad();
+            });
+          } else {
+            doLoad();
+          }
         } else {
           this.dialogs.showAlert('打开游戏', '没有找到保存的游戏。');
         }
@@ -321,10 +364,17 @@ class App {
           this.dialogs.hide();
         });
       },
+      'options': () => {
+        this.dialogs.showOptions(this.options, (newOpts) => {
+          this.options = { ...this.options, ...newOpts };
+          this.saveOptions();
+          this.audio.soundEnabled = this.options.sound;
+        });
+      },
       'sound-toggle': () => {
         const enabled = this.audio.toggleSound();
-        const soundLabel = document.getElementById('menu-sound-check');
-        if (soundLabel) soundLabel.textContent = enabled ? '✓ ' : '   ';
+        this.options.sound = enabled;
+        this.saveOptions();
       },
       'rules': () => {
         this.dialogs.showAlert(
@@ -338,6 +388,14 @@ class App {
       },
       'about': () => {
         this.dialogs.showAbout();
+      },
+      'exit': () => {
+        this.dialogs.showConfirm('退出', '是否退出蜘蛛纸牌?', () => {
+          if (this.options.saveOnExit && this.game.moves > 0 && !this.game.isWon) {
+            this.saveCurrentGame();
+          }
+          window.close();
+        });
       }
     };
 
@@ -353,10 +411,34 @@ class App {
 
   bindShortcuts() {
     window.addEventListener('keydown', async (e) => {
+      // F1: Rules / Help Topics
+      if (e.key === 'F1') {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="rules"]');
+        if (action) action.click();
+      }
       // F2: New Game
-      if (e.key === 'F2') {
+      else if (e.key === 'F2') {
         e.preventDefault();
         const action = document.querySelector('[data-action="new-game"]');
+        if (action) action.click();
+      }
+      // F3: Difficulty
+      else if (e.key === 'F3') {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="difficulty"]');
+        if (action) action.click();
+      }
+      // F4: Stats
+      else if (e.key === 'F4') {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="stats"]');
+        if (action) action.click();
+      }
+      // F5: Options
+      else if (e.key === 'F5') {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="options"]');
         if (action) action.click();
       }
       // Ctrl+Z / Cmd+Z: Undo
@@ -390,12 +472,6 @@ class App {
       else if (e.key === 'd' || e.key === 'D') {
         e.preventDefault();
         this.interaction.handleStockClick();
-      }
-      // F4: Stats
-      else if (e.key === 'F4') {
-        e.preventDefault();
-        const action = document.querySelector('[data-action="stats"]');
-        if (action) action.click();
       }
       // Escape: Boss Key (FUN_01006db6) or close dialog
       else if (e.key === 'Escape') {
