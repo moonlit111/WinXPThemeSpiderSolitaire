@@ -1,9 +1,8 @@
 /**
  * Renderer.js
  * Handles DOM rendering of the 10 tableau columns, cards, stock, foundation, and status bar.
+ * Implements exact 250ms sequential flash hint animation (FUN_01004dfb).
  */
-
-import { Card, SUITS } from '../engine/Card.js';
 
 export class Renderer {
   constructor(game, container) {
@@ -52,12 +51,11 @@ export class Renderer {
       const colEl = this.columnEls[c];
       const cards = this.game.columns[c];
       
-      // Retain the empty slot
+      // Clear previous card elements but retain the empty slot
       colEl.querySelectorAll('.card-element').forEach(el => el.remove());
 
       if (cards.length === 0) continue;
 
-      // Calculate dynamic vertical offsets
       let downCount = 0;
       let upCount = 0;
       for (const card of cards) {
@@ -65,11 +63,10 @@ export class Renderer {
         else downCount++;
       }
 
-      // Default offsets
       let downStep = 13;
       let upStep = 23;
 
-      // If cards exceed height, compress spacing smoothly
+      // Auto-compress spacing if column overflows
       const requiredHeight = downCount * downStep + upCount * upStep + cardHeight;
       if (requiredHeight > availableHeight - 20 && cards.length > 1) {
         const scale = (availableHeight - cardHeight - 30) / (downCount * downStep + upCount * upStep);
@@ -99,8 +96,6 @@ export class Renderer {
         }
 
         colEl.appendChild(cardEl);
-
-        // Advance top offset
         currentTop += card.faceUp ? upStep : downStep;
       }
     }
@@ -117,7 +112,6 @@ export class Renderer {
       return;
     }
 
-    // Render up to 5 overlapping card backs
     for (let i = 0; i < dealsLeft; i++) {
       const cardEl = document.createElement('div');
       cardEl.className = 'stock-card';
@@ -144,8 +138,7 @@ export class Renderer {
 
       if (i < suits.length) {
         const suit = suits[i];
-        // King of that completed suit: 1 + suit * 13 + 12
-        const kingImgIndex = 1 + suit * 13 + 12;
+        const kingImgIndex = 1 + suit * 13 + 12; // King card index
         const img = document.createElement('img');
         img.src = `assets/cards/CARD${kingImgIndex}.png`;
         img.alt = `Completed Suit ${i + 1}`;
@@ -161,21 +154,39 @@ export class Renderer {
     if (this.movesEl) this.movesEl.textContent = `操作: ${this.game.moves}`;
   }
 
-  highlightHint(hint) {
-    // Clear previous hints
+  /**
+   * Exact 1:1 InvertRect hint animation from FUN_01004dfb:
+   * 1. Invert/highlight source card for 250ms (Sleep 0xfa), un-invert.
+   * 2. Invert/highlight destination card/slot for 250ms (Sleep 0xfa), un-invert.
+   */
+  async playHintAnimation(hint) {
     this.clearHints();
     if (!hint) return;
 
-    const colEl = this.columnEls[hint.fromCol];
-    if (!colEl) return;
-    const cardEl = colEl.querySelector(`[data-card-idx="${hint.cardIndex}"]`);
-    if (cardEl) {
-      cardEl.classList.add('hinted');
-      setTimeout(() => this.clearHints(), 2500);
+    const fromColEl = this.columnEls[hint.fromCol];
+    const toColEl = this.columnEls[hint.toCol];
+    if (!fromColEl || !toColEl) return;
+
+    const sourceCardEl = fromColEl.querySelector(`[data-card-idx="${hint.cardIndex}"]`);
+    const targetCards = toColEl.querySelectorAll('.card-element');
+    const targetEl = targetCards.length > 0 ? targetCards[targetCards.length - 1] : toColEl.querySelector('.column-slot');
+
+    if (sourceCardEl) {
+      sourceCardEl.classList.add('hint-inverted');
+      await new Promise(r => setTimeout(r, 250)); // 250ms
+      sourceCardEl.classList.remove('hint-inverted');
+    }
+
+    if (targetEl) {
+      targetEl.classList.add('hint-inverted');
+      await new Promise(r => setTimeout(r, 250)); // 250ms
+      targetEl.classList.remove('hint-inverted');
     }
   }
 
   clearHints() {
-    this.tableauEl.querySelectorAll('.hinted').forEach(el => el.classList.remove('hinted'));
+    this.tableauEl.querySelectorAll('.hint-inverted, .hinted').forEach(el => {
+      el.classList.remove('hint-inverted', 'hinted');
+    });
   }
 }

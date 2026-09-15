@@ -1,6 +1,10 @@
 /**
  * Interaction.js
- * Handles mouse and touch drag-and-drop, smart click-to-move, and stock dealing.
+ * Handles mouse and touch drag-and-drop, smart click-to-move, right-click peek, and stock dealing.
+ * Matches original Windows XP input messages:
+ * - WM_LBUTTONDOWN (FUN_01005753 -> PlaySoundW 0x80 / 128.wav)
+ * - WM_LBUTTONUP (FUN_01006732 -> PlaySoundW 0x7d / 125.wav)
+ * - WM_RBUTTONDOWN / WM_RBUTTONUP (FUN_01003712 / FUN_010059a6 -> Peek card)
  */
 
 export class Interaction {
@@ -13,6 +17,7 @@ export class Interaction {
 
     this.dragLayer = document.getElementById('drag-layer');
     this.activeDrag = null;
+    this.peekingEl = null;
 
     this.bindEvents();
   }
@@ -21,7 +26,10 @@ export class Interaction {
     // 1. Stock pile click
     this.renderer.stockEl.addEventListener('click', () => this.handleStockClick());
 
-    // 2. Tableau pointer interaction
+    // 2. Prevent right-click context menu on tableau
+    this.renderer.tableauEl.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // 3. Pointer events
     this.renderer.tableauEl.addEventListener('pointerdown', (e) => this.onPointerDown(e));
     window.addEventListener('pointermove', (e) => this.onPointerMove(e));
     window.addEventListener('pointerup', (e) => this.onPointerUp(e));
@@ -32,16 +40,17 @@ export class Interaction {
     const check = this.game.canDeal();
     if (!check.canDeal) {
       if (check.reason === 'EMPTY_COLUMN') {
-        this.dialogs.showAlert('蜘蛛纸牌', '有空位时不允许发牌。');
+        this.audio.play('noHint'); // 127.wav error thud
+        this.dialogs.showAlert('蜘蛛纸牌', '有空位时不允许发牌。'); // String ID 5
       }
       return;
     }
 
     const result = this.game.dealRound();
     if (result.success) {
-      this.audio.play('deal');
+      this.audio.play('deal'); // 124.wav
       if (result.completedRuns.length > 0) {
-        setTimeout(() => this.audio.play('complete'), 300);
+        setTimeout(() => this.audio.play('deal'), 300); // 124.wav on run collection
       }
       this.renderer.render();
 
@@ -55,10 +64,19 @@ export class Interaction {
     const cardEl = e.target.closest('.card-element');
     if (!cardEl) return;
 
+    // Right-click peek (FUN_01003712)
+    if (e.button === 2) {
+      this.peekingEl = cardEl;
+      cardEl.classList.add('peeking');
+      return;
+    }
+
+    // Only left click starts drag
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
     const fromCol = parseInt(cardEl.dataset.col);
     const cardIdx = parseInt(cardEl.dataset.cardIdx);
 
-    // Verify if this card sequence is movable
     if (!this.game.isSequenceMovable(fromCol, cardIdx)) return;
 
     const cardRect = cardEl.getBoundingClientRect();
@@ -81,6 +99,8 @@ export class Interaction {
       dragGroup: null
     };
 
+    // spri.exe WM_LBUTTONDOWN -> PlaySoundW 0x80 (128.wav, card pickup click)
+    this.audio.play('grab');
     e.preventDefault();
   }
 
@@ -90,7 +110,6 @@ export class Interaction {
     const dx = e.clientX - this.activeDrag.startX;
     const dy = e.clientY - this.activeDrag.startY;
 
-    // Start dragging threshold (5px)
     if (!this.activeDrag.isDragging) {
       if (Math.hypot(dx, dy) > 5) {
         this.activeDrag.isDragging = true;
@@ -113,7 +132,6 @@ export class Interaction {
 
     const firstRect = this.activeDrag.movingEls[0].getBoundingClientRect();
 
-    // Clone moving cards into drag group preserving relative offsets
     this.activeDrag.movingEls.forEach((el) => {
       const rect = el.getBoundingClientRect();
       const clone = el.cloneNode(true);
@@ -122,8 +140,6 @@ export class Interaction {
       clone.style.left = '0px';
       clone.style.transition = 'none';
       dragGroup.appendChild(clone);
-
-      // Hide original card
       el.style.opacity = '0';
     });
 
@@ -136,28 +152,32 @@ export class Interaction {
   }
 
   onPointerUp(e) {
+    // Release right click peek (FUN_010059a6)
+    if (this.peekingEl) {
+      this.peekingEl.classList.remove('peeking');
+      this.peekingEl = null;
+    }
+
     if (!this.activeDrag) return;
 
-    const { fromCol, cardIdx, isDragging, dragGroup, movingEls } = this.activeDrag;
+    const { fromCol, cardIdx, isDragging, dragGroup } = this.activeDrag;
 
     if (!isDragging) {
-      // User tapped/clicked: Smart Click-to-Move
+      // Smart Click-to-Move
       this.handleSmartClickMove(fromCol, cardIdx);
       this.activeDrag = null;
       return;
     }
 
-    // Drag-and-drop release: Find target column
     const targetCol = this.findDropTarget(e.clientX, e.clientY);
 
     if (targetCol !== null && this.game.canMove(fromCol, cardIdx, targetCol)) {
-      // Valid Drop!
       const res = this.game.moveCards(fromCol, cardIdx, targetCol);
       if (res.success) {
+        // spri.exe WM_LBUTTONUP -> PlaySoundW 0x7d (125.wav, drop snap)
+        this.audio.play('drop');
         if (res.completedRun) {
-          this.audio.play('complete');
-        } else {
-          this.audio.play('drop');
+          setTimeout(() => this.audio.play('deal'), 200); // 124.wav on run cleared
         }
         if (dragGroup) dragGroup.remove();
         this.renderer.render();
@@ -167,7 +187,6 @@ export class Interaction {
         }
       }
     } else {
-      // Invalid Drop: animate return
       this.cancelDrag();
     }
 
@@ -175,6 +194,10 @@ export class Interaction {
   }
 
   onPointerCancel() {
+    if (this.peekingEl) {
+      this.peekingEl.classList.remove('peeking');
+      this.peekingEl = null;
+    }
     if (this.activeDrag) {
       this.cancelDrag();
       this.activeDrag = null;
@@ -196,15 +219,12 @@ export class Interaction {
       const colEl = this.renderer.columnEls[c];
       const rect = colEl.getBoundingClientRect();
 
-      // Check if point is horizontally inside or close to column
       if (clientX >= rect.left - 10 && clientX <= rect.right + 10) {
-        // Vertical check: column bounds or below
         if (clientY >= rect.top - 20 && clientY <= rect.bottom + 100) {
           return c;
         }
       }
 
-      // Fallback: closest center distance
       const colCenterX = rect.left + rect.width / 2;
       const dist = Math.abs(clientX - colCenterX);
       if (dist < minDistance && dist < rect.width * 1.2) {
@@ -216,10 +236,6 @@ export class Interaction {
     return bestCol;
   }
 
-  /**
-   * Smart Click-to-Move:
-   * When user clicks a movable sequence, automatically finds the best destination column.
-   */
   handleSmartClickMove(fromCol, cardIdx) {
     const movingCard = this.game.columns[fromCol][cardIdx];
     let bestTarget = null;
@@ -234,12 +250,11 @@ export class Interaction {
         if (targetCol.length > 0) {
           const targetTop = targetCol[targetCol.length - 1];
           if (targetTop.suit === movingCard.suit) {
-            priority = 100; // Same suit is top priority!
+            priority = 100; // Same suit
           } else {
             priority = 50;  // Different suit
           }
         } else {
-          // Empty column: only prioritize if moving exposes a face-down card
           if (cardIdx > 0 && !this.game.columns[fromCol][cardIdx - 1].faceUp) {
             priority = 30;
           } else {
@@ -257,10 +272,9 @@ export class Interaction {
     if (bestTarget !== null) {
       const res = this.game.moveCards(fromCol, cardIdx, bestTarget);
       if (res.success) {
+        this.audio.play('drop');
         if (res.completedRun) {
-          this.audio.play('complete');
-        } else {
-          this.audio.play('drop');
+          setTimeout(() => this.audio.play('deal'), 200);
         }
         this.renderer.render();
 
@@ -268,14 +282,11 @@ export class Interaction {
           this.handleWin();
         }
       }
-    } else {
-      // Light click feedback
-      this.audio.play('click');
     }
   }
 
   handleWin() {
-    this.audio.play('win');
+    this.audio.play('win'); // 129.wav
     this.victoryAnim.start();
     setTimeout(() => {
       this.dialogs.showWin(this.game.score, this.game.moves, () => {
@@ -283,6 +294,6 @@ export class Interaction {
         this.game.initGame();
         this.renderer.render();
       });
-    }, 2000);
+    }, 2500);
   }
 }

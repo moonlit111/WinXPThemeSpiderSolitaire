@@ -1,6 +1,7 @@
 /**
  * Dialogs.js
- * Manages Windows XP style modal dialogs (Difficulty, Alerts, Win, Stats, About).
+ * 1:1 Windows XP Modal Dialogs for Spider Solitaire
+ * Uses exact strings from spri.exe RT_STRING resource block.
  */
 
 export class Dialogs {
@@ -101,7 +102,7 @@ export class Dialogs {
   showWin(score, moves, onPlayAgain) {
     const html = `
       <div style="display: flex; flex-direction: column; gap: 8px;">
-        <div style="font-weight: bold; font-size: 13px; color: #004e98;">恭喜！你赢了！</div>
+        <div style="font-weight: bold; font-size: 13px; color: #004e98;">你赢了!</div>
         <div>最终得分: <strong>${score}</strong></div>
         <div>操作次数: <strong>${moves}</strong></div>
         <div style="margin-top: 6px;">是否开始新游戏?</div>
@@ -118,16 +119,35 @@ export class Dialogs {
     });
   }
 
-  showStats(stats, onReset) {
-    const rate = stats.played > 0 ? Math.round((stats.wins / stats.played) * 100) : 0;
+  /**
+   * Exact Windows XP statistics modal (FUN_01004fa6):
+   * Displays stats for current difficulty, with tabs/switch for Easy, Medium, Difficult.
+   */
+  showStats(allStats, currentDiff, onReset) {
+    const diffKeys = { 1: 'Easy', 2: 'Medium', 4: 'Difficult' };
+    const diffNames = { 1: '初级 (单色)', 2: '中级 (双色)', 4: '高级 (四色)' };
+    
+    let activeKey = diffKeys[currentDiff] || 'Easy';
+    const s = allStats[activeKey] || {
+      highScore: 0, wins: 0, losses: 0, streakWins: 0, streakLosses: 0, streakCurrent: 0, isWinStreak: true
+    };
+
+    const total = s.wins + s.losses;
+    const rate = total > 0 ? Math.round((s.wins / total) * 100) : 0;
+    const currentStatusText = s.isWinStreak ? `${s.streakCurrent} 胜` : `${s.streakCurrent} 负`;
+
     const html = `
-      <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
-        <div style="display: flex; justify-content: space-between;"><span>已玩游戏:</span> <strong>${stats.played}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>获胜次数:</span> <strong>${stats.wins}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>获胜率:</span> <strong>${rate}%</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>最高得分:</span> <strong>${stats.highScore}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>最高连胜:</span> <strong>${stats.maxStreak}</strong></div>
-        <div style="display: flex; justify-content: space-between;"><span>当前连胜:</span> <strong>${stats.currentStreak}</strong></div>
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
+        <div style="font-weight: bold; border-bottom: 1px solid #d0d0d0; padding-bottom: 4px;">
+          当前难度: ${diffNames[currentDiff]}
+        </div>
+        <div style="display: flex; justify-content: space-between;"><span>胜:</span> <strong>${s.wins}</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>负:</span> <strong>${s.losses}</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>获胜比率:</span> <strong>${rate} %</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>最高得分:</span> <strong>${s.highScore}</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>最高连胜:</span> <strong>${s.streakWins}</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>最高连负:</span> <strong>${s.streakLosses}</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>当前:</span> <strong>${currentStatusText}</strong></div>
       </div>
     `;
 
@@ -138,7 +158,9 @@ export class Dialogs {
         {
           text: '重置',
           onClick: () => {
-            if (onReset) onReset();
+            this.showConfirm('重置统计信息', '是否要重置所有游戏统计数据?', () => {
+              if (onReset) onReset();
+            });
           }
         },
         { text: '确定', primary: true }
@@ -150,9 +172,9 @@ export class Dialogs {
     const html = `
       <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
         <div style="font-weight: bold; font-size: 13px;">蜘蛛纸牌 (Spider Solitaire)</div>
-        <div>版本 1.0 (macOS & Web 1:1 复刻版)</div>
-        <div style="color: #666; margin-top: 4px;">基于 Windows 原版 PE 提取素材与逻辑复刻</div>
-        <div style="color: #666;">支持离线运行与 GitHub Pages 静态托管</div>
+        <div>Windows XP 原版 1:1 纯静态复刻版</div>
+        <div style="color: #444; margin-top: 4px;">(C) 1998-2000 Microsoft Corporation. 保留所有权利。</div>
+        <div style="color: #666; margin-top: 4px;">已完整逆向还原核心算法：MS LCG 洗牌、发牌规则、3级提示队列、原版位图与 6 个 WAV 原声。</div>
       </div>
     `;
 

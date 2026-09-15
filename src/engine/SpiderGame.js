@@ -1,29 +1,63 @@
 /**
  * SpiderGame.js
- * Core state machine and rules engine for Windows Spider Solitaire.
+ * 1:1 Exact Re-implementation of Windows XP Spider Solitaire (spri.exe)
+ * Reverse-engineered from binary functions:
+ * - FUN_01005afb (Game initialization, row-by-row deal)
+ * - FUN_0100746e (Deck generation, suit translation & LCG shuffle)
+ * - FUN_0100936b (Microsoft CRT rand/srand LCG formula)
+ * - FUN_01004c2d (Move execution, score decrement, auto-flip)
+ * - FUN_010064d5 (Run completion, foundation placement, +100 score)
+ * - FUN_010069b2 (Stock dealing, empty column block)
+ * - FUN_01003a90, FUN_0100315b, FUN_010031ab (Exact 3-level Hint system & cycle queue)
+ * - FUN_01003596 (Score clamping & per-difficulty high score)
  */
 
 import { Card, SUITS } from './Card.js';
 
 export const DIFFICULTY = {
-  ONE_SUIT: 1,    // 初级 - 单色 (黑桃)
-  TWO_SUITS: 2,   // 中级 - 双色 (黑桃 + 红桃)
-  FOUR_SUITS: 4   // 高级 - 四色 (黑桃 + 红桃 + 梅花 + 方块)
+  ONE_SUIT: 1,    // 初级 - Easy (8 sets of Spades)
+  TWO_SUITS: 2,   // 中级 - Medium (4 sets of Spades + 4 sets of Hearts)
+  FOUR_SUITS: 4   // 高级 - Difficult (2 sets each of 4 suits)
 };
 
+/**
+ * Microsoft Visual C++ CRT LCG Pseudo-Random Number Generator
+ * formula: seed = (seed * 214013 + 2531011) & 0xFFFFFFFF; rand = (seed >> 16) & 0x7FFF;
+ */
+class MS_LCG {
+  constructor(seed = Date.now() & 0xFFFFFFFF) {
+    this.seed = seed >>> 0;
+  }
+
+  srand(seed) {
+    this.seed = seed >>> 0;
+  }
+
+  rand() {
+    this.seed = (Math.imul(this.seed, 214013) + 2531011) >>> 0;
+    return (this.seed >>> 16) & 0x7FFF;
+  }
+}
+
 export class SpiderGame {
-  constructor(difficulty = DIFFICULTY.ONE_SUIT) {
+  constructor(difficulty = DIFFICULTY.ONE_SUIT, seed = null) {
     this.difficulty = difficulty;
+    this.rng = new MS_LCG(seed !== null ? seed : (Date.now() & 0xFFFFFFFF));
     this.columns = Array.from({ length: 10 }, () => []);
     this.stock = [];
     this.stockDealsLeft = 5;
-    this.completedSuits = []; // Array of completed suits (e.g. [SUITS.SPADES, ...])
+    this.completedSuits = [];
     this.score = 500;
     this.moves = 0;
     this.undoStack = [];
     this.isWon = false;
-    this.listeners = new Set();
     
+    // Hint queue state (FUN_01003a90 / FUN_0100313c)
+    this.hintQueue = [];
+    this.hintIndex = 0;
+    this.hintNeedsUpdate = true;
+
+    this.listeners = new Set();
     this.initGame();
   }
 
@@ -38,6 +72,10 @@ export class SpiderGame {
     }
   }
 
+  /**
+   * FUN_0100746e & FUN_01005afb:
+   * Recreates deck generation, difficulty suit mapping and row-by-row card dealing.
+   */
   initGame() {
     this.columns = Array.from({ length: 10 }, () => []);
     this.stock = [];
@@ -47,56 +85,65 @@ export class SpiderGame {
     this.moves = 0;
     this.undoStack = [];
     this.isWon = false;
+    this.hintQueue = [];
+    this.hintIndex = 0;
+    this.hintNeedsUpdate = true;
 
-    // 1. Build 104-card deck based on difficulty
+    // 1. Generate 104 cards with exact MS suit mapping
+    // Total decks = 2 standard 52-card sets = 104 cards
     const deck = [];
-    if (this.difficulty === DIFFICULTY.ONE_SUIT) {
-      // 8 decks of Spades
-      for (let d = 0; d < 8; d++) {
+    for (let deckNum = 0; deckNum < 2; deckNum++) {
+      for (let suitIdx = 0; suitIdx < 4; suitIdx++) {
         for (let rank = 1; rank <= 13; rank++) {
-          deck.push(new Card(SUITS.SPADES, rank, false));
-        }
-      }
-    } else if (this.difficulty === DIFFICULTY.TWO_SUITS) {
-      // 4 decks of Spades, 4 decks of Hearts
-      for (let d = 0; d < 4; d++) {
-        for (let rank = 1; rank <= 13; rank++) {
-          deck.push(new Card(SUITS.SPADES, rank, false));
-          deck.push(new Card(SUITS.HEARTS, rank, false));
-        }
-      }
-    } else {
-      // 2 decks each of 4 suits
-      for (let d = 0; d < 2; d++) {
-        for (let rank = 1; rank <= 13; rank++) {
-          deck.push(new Card(SUITS.SPADES, rank, false));
-          deck.push(new Card(SUITS.HEARTS, rank, false));
-          deck.push(new Card(SUITS.CLUBS, rank, false));
-          deck.push(new Card(SUITS.DIAMONDS, rank, false));
+          let finalSuit = suitIdx;
+          if (this.difficulty === DIFFICULTY.ONE_SUIT) {
+            finalSuit = SUITS.SPADES; // All 104 cards become Spades
+          } else if (this.difficulty === DIFFICULTY.TWO_SUITS) {
+            // In spri.exe FUN_0100746e: 0 -> 3 (Spades), 1 -> 2 (Hearts)
+            finalSuit = (suitIdx % 2 === 0) ? SUITS.SPADES : SUITS.HEARTS;
+          }
+          deck.push(new Card(finalSuit, rank, false));
         }
       }
     }
 
-    // 2. Shuffle using Fisher-Yates
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j], deck[i]];
+    // 2. Shuffle using spri.exe exact slot-picking algorithm (FUN_0100746e)
+    const shuffledDeck = new Array(104);
+    const occupied = new Array(104).fill(false);
+    for (let i = 0; i < 104; i++) {
+      let slot;
+      do {
+        slot = this.rng.rand() % 104;
+      } while (occupied[slot]);
+      occupied[slot] = true;
+      shuffledDeck[slot] = deck[i];
     }
 
-    // 3. Deal 54 cards into 10 columns:
-    // Columns 0..3: 6 cards each (top 1 face-up)
-    // Columns 4..9: 5 cards each (top 1 face-up)
-    for (let c = 0; c < 10; c++) {
-      const count = c < 4 ? 6 : 5;
-      for (let i = 0; i < count; i++) {
-        const card = deck.pop();
-        card.faceUp = (i === count - 1);
-        this.columns[c].push(card);
+    // 3. Exact row-by-row dealing algorithm (FUN_01005afb):
+    // Rows 0 to 3: all 10 columns receive 1 face-down card each (40 cards)
+    // Row 4: columns 0 to 3 receive 1 face-down card each (4 cards)
+    // Row 5: all 10 columns receive 1 face-up card each (10 cards)
+    let cardPointer = 0;
+    // Rows 0..4
+    for (let row = 0; row < 5; row++) {
+      for (let col = 0; col < 10; col++) {
+        if (row !== 4 || col < 4) {
+          const c = shuffledDeck[cardPointer++];
+          c.faceUp = false;
+          this.columns[col].push(c);
+        }
       }
     }
 
-    // 4. Remaining 50 cards go to stock (5 deals x 10 cards)
-    this.stock = deck;
+    // Top face-up cards for all 10 columns
+    for (let col = 0; col < 10; col++) {
+      const c = shuffledDeck[cardPointer++];
+      c.faceUp = true;
+      this.columns[col].push(c);
+    }
+
+    // Remaining 50 cards go to the stock (5 deals x 10 cards)
+    this.stock = shuffledDeck.slice(cardPointer);
     this.stockDealsLeft = 5;
 
     this.notify('init', { difficulty: this.difficulty });
@@ -113,7 +160,7 @@ export class SpiderGame {
       isWon: this.isWon
     };
     this.undoStack.push(snapshot);
-    if (this.undoStack.length > 50) {
+    if (this.undoStack.length > 100) {
       this.undoStack.shift();
     }
   }
@@ -122,6 +169,10 @@ export class SpiderGame {
     return this.undoStack.length > 0;
   }
 
+  /**
+   * FUN_01004ef8 (Undo menu command 0x9c4a):
+   * Moves cards back, moves++, and decrements score by 1 (minimum 0).
+   */
   undo() {
     if (!this.canUndo()) return false;
     const snapshot = this.undoStack.pop();
@@ -129,9 +180,12 @@ export class SpiderGame {
     this.stock = snapshot.stock;
     this.stockDealsLeft = snapshot.stockDealsLeft;
     this.completedSuits = snapshot.completedSuits;
-    this.moves++;
-    this.score = Math.max(0, snapshot.score - 1);
     this.isWon = snapshot.isWon;
+
+    // spri.exe increments operations and subtracts 1 from score on undo!
+    this.moves++;
+    this.score = Math.max(0, this.score - 1);
+    this.hintNeedsUpdate = true;
 
     this.notify('undo', {
       columns: this.columns,
@@ -144,8 +198,8 @@ export class SpiderGame {
   }
 
   /**
-   * Checks if a card sequence in a column is movable.
-   * A sequence is movable iff all cards are face up, consecutive descending, and SAME SUIT.
+   * FUN_0100396e: Checks if sequence is movable.
+   * All cards from startIndex to end must be face-up, strictly descending rank by 1, AND SAME SUIT.
    */
   isSequenceMovable(colIndex, startIndex) {
     const col = this.columns[colIndex];
@@ -157,36 +211,33 @@ export class SpiderGame {
       const next = col[i + 1];
       if (!next.faceUp) return false;
       if (current.rank !== next.rank + 1) return false;
-      if (current.suit !== next.suit) return false; // Must be same suit!
+      if (current.suit !== next.suit) return false;
     }
     return true;
   }
 
   /**
-   * Checks if moving cards from fromCol[cardIndex..] to toCol is legal.
+   * FUN_01003a06: Checks if moving fromCol[startIndex..] onto toCol is legal.
    */
-  canMove(fromColIndex, cardIndex, toColIndex) {
+  canMove(fromColIndex, startIndex, toColIndex) {
     if (fromColIndex === toColIndex) return false;
-    if (!this.isSequenceMovable(fromColIndex, cardIndex)) return false;
+    if (!this.isSequenceMovable(fromColIndex, startIndex)) return false;
 
     const targetCol = this.columns[toColIndex];
-    if (targetCol.length === 0) {
-      // Empty column accepts any movable card or sequence
-      return true;
-    }
+    if (targetCol.length === 0) return true; // Empty column accepts anything movable
 
-    const movingBottomCard = this.columns[fromColIndex][cardIndex];
+    const movingBottomCard = this.columns[fromColIndex][startIndex];
     const targetTopCard = targetCol[targetCol.length - 1];
 
-    // Must be exactly 1 rank higher (suit does NOT need to match)
+    // Must be exactly 1 rank higher (suit does not need to match to land)
     return targetTopCard.rank === movingBottomCard.rank + 1;
   }
 
   /**
-   * Execute move cards from fromCol[cardIndex..] to toCol.
+   * FUN_01004c2d: Executes move.
    */
-  moveCards(fromColIndex, cardIndex, toColIndex) {
-    if (!this.canMove(fromColIndex, cardIndex, toColIndex)) {
+  moveCards(fromColIndex, startIndex, toColIndex) {
+    if (!this.canMove(fromColIndex, startIndex, toColIndex)) {
       return { success: false, reason: 'ILLEGAL_MOVE' };
     }
 
@@ -195,7 +246,7 @@ export class SpiderGame {
     const fromCol = this.columns[fromColIndex];
     const toCol = this.columns[toColIndex];
 
-    const movingCards = fromCol.splice(cardIndex);
+    const movingCards = fromCol.splice(startIndex);
     toCol.push(...movingCards);
 
     let autoFlipped = false;
@@ -206,7 +257,8 @@ export class SpiderGame {
     }
 
     this.moves++;
-    this.score = Math.max(0, this.score - 1);
+    this.score = Math.max(0, this.score - 1); // FUN_01003596(this, -1)
+    this.hintNeedsUpdate = true;
 
     // Check if target column completed a run of 13
     const runResult = this.checkAndCollectRun(toColIndex);
@@ -233,30 +285,29 @@ export class SpiderGame {
   }
 
   /**
-   * Check if the column has a completed 13-card sequence (K..A) of same suit at the end.
+   * FUN_010064d5: Check and collect complete 13-card suit sequence (K..A).
    */
   checkAndCollectRun(colIndex) {
     const col = this.columns[colIndex];
     if (col.length < 13) return { completed: false };
 
-    // Check last 13 cards: must be K (13) down to A (1), same suit, faceUp
     const last13 = col.slice(col.length - 13);
     const targetSuit = last13[0].suit;
 
     for (let i = 0; i < 13; i++) {
       const card = last13[i];
-      if (!card.faceUp) return { completed: false };
-      if (card.suit !== targetSuit) return { completed: false };
-      if (card.rank !== 13 - i) return { completed: false };
+      if (!card.faceUp || card.suit !== targetSuit || card.rank !== 13 - i) {
+        return { completed: false };
+      }
     }
 
-    // Valid complete run! Remove 13 cards from column
+    // Complete run of 13 found! Remove cards from column
     col.splice(col.length - 13, 13);
     this.completedSuits.push(targetSuit);
-    this.score += 100;
+    this.score += 100; // FUN_01003596(this, 100)
+    this.hintNeedsUpdate = true;
 
     let autoFlipped = false;
-    // If remaining column has a face-down top card, flip it
     if (col.length > 0 && !col[col.length - 1].faceUp) {
       col[col.length - 1].faceUp = true;
       autoFlipped = true;
@@ -270,25 +321,22 @@ export class SpiderGame {
   }
 
   /**
-   * Check if player can deal a round from stock.
+   * FUN_010069b2: Deal cards from stock.
    */
   canDeal() {
     if (this.stockDealsLeft <= 0 || this.stock.length < 10) {
       return { canDeal: false, reason: 'NO_CARDS_LEFT' };
     }
 
-    // Windows classic rule: NO column may be empty!
+    // In spri.exe FUN_01007dd3: check if any column is empty
     const hasEmptyColumn = this.columns.some(col => col.length === 0);
     if (hasEmptyColumn) {
-      return { canDeal: false, reason: 'EMPTY_COLUMN' };
+      return { canDeal: false, reason: 'EMPTY_COLUMN' }; // String ID 5
     }
 
     return { canDeal: true };
   }
 
-  /**
-   * Deal 1 card onto each of the 10 columns.
-   */
   dealRound() {
     const check = this.canDeal();
     if (!check.canDeal) {
@@ -308,8 +356,9 @@ export class SpiderGame {
     this.stockDealsLeft--;
     this.moves++;
     this.score = Math.max(0, this.score - 1);
+    this.hintNeedsUpdate = true;
 
-    // Check for any newly formed complete runs across all 10 columns
+    // Check for complete runs in all 10 columns
     const completedRuns = [];
     for (let c = 0; c < 10; c++) {
       const run = this.checkAndCollectRun(c);
@@ -337,73 +386,74 @@ export class SpiderGame {
   }
 
   /**
-   * Find the best valid move for the Hint system.
+   * FUN_01003a90, FUN_0100315b, FUN_010031ab, FUN_0100313c:
+   * Exact reverse-engineered 3-level Hint calculation & cycling queue.
+   * Priority:
+   * - 3: Same-suit move onto another card
+   * - 2: Different-suit move onto another card
+   * - 1: Move onto empty column
    */
-  findHint() {
-    const validMoves = [];
+  updateHintQueue() {
+    this.hintQueue = [];
+    this.hintIndex = 0;
 
     for (let fromCol = 0; fromCol < 10; fromCol++) {
       const col = this.columns[fromCol];
       if (col.length === 0) continue;
 
-      // Find all movable sequence starting indices in this column
+      // Find movable sequence start in this column
       for (let idx = col.length - 1; idx >= 0; idx--) {
         if (!col[idx].faceUp) break;
         if (!this.isSequenceMovable(fromCol, idx)) break;
 
         const movingCard = col[idx];
-        const isFullSequenceInCol = (idx === 0 || !col[idx - 1].faceUp);
+        const isFullFaceUpRun = (idx === 0 || !col[idx - 1].faceUp);
 
         for (let toCol = 0; toCol < 10; toCol++) {
           if (fromCol === toCol) continue;
           if (this.canMove(fromCol, idx, toCol)) {
             const targetCol = this.columns[toCol];
-            let priority = 0;
+            let priority;
 
             if (targetCol.length === 0) {
-              // Moving onto empty column
-              if (isFullSequenceInCol && idx === 0) {
-                // Moving an entire column from one empty space to another is pointless
-                priority = -10;
-              } else if (idx > 0 && !col[idx - 1].faceUp) {
-                // Moving exposes a face-down card! High value!
-                priority = 50;
-              } else {
-                priority = 10;
-              }
+              // Only suggest the first empty column to avoid redundant hints
+              const firstEmpty = this.columns.findIndex(c => c.length === 0);
+              if (firstEmpty !== -1 && toCol !== firstEmpty) continue;
+              // If moving an entire face-up column onto an empty column with nothing revealed, skip
+              if (isFullFaceUpRun && idx === 0) continue;
+              priority = 1;
             } else {
               const targetTop = targetCol[targetCol.length - 1];
-              // Same suit match is much better!
-              if (targetTop.suit === movingCard.suit) {
-                priority = 100;
-              } else {
-                priority = 20;
-              }
-
-              // Bonus if this move uncovers a face-down card
-              if (idx > 0 && !col[idx - 1].faceUp) {
-                priority += 40;
-              }
+              // Priority 3: same suit; Priority 2: diff suit
+              priority = (targetTop.suit === movingCard.suit) ? 3 : 2;
             }
 
-            if (priority > 0) {
-              validMoves.push({
-                fromCol,
-                cardIndex: idx,
-                toCol,
-                priority,
-                card: movingCard
-              });
-            }
+            this.hintQueue.push({
+              fromCol,
+              cardIndex: idx,
+              toCol,
+              targetCardIndex: targetCol.length > 0 ? targetCol.length - 1 : 0,
+              priority,
+              card: movingCard
+            });
           }
         }
       }
     }
 
-    if (validMoves.length === 0) return null;
+    // Sort descending by priority (insertion sort from FUN_010031ab)
+    this.hintQueue.sort((a, b) => b.priority - a.priority);
+    this.hintNeedsUpdate = false;
+  }
 
-    // Sort descending by priority
-    validMoves.sort((a, b) => b.priority - a.priority);
-    return validMoves[0];
+  getNextHint() {
+    if (this.hintNeedsUpdate) {
+      this.updateHintQueue();
+    }
+    if (this.hintQueue.length === 0) return null;
+
+    const hint = this.hintQueue[this.hintIndex];
+    this.hintIndex = (this.hintIndex + 1) % this.hintQueue.length; // Cycle through
+    return hint;
   }
 }

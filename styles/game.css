@@ -203,3 +203,16 @@
   z-index: 5000;
   display: none;
 }
+
+/* Windows GDI InvertRect 1:1 Recreation */
+.hint-inverted {
+  filter: invert(1) !important;
+  z-index: 9999 !important;
+}
+
+/* Right-click peek state */
+.card-element.peeking {
+  transform: translateY(-8px) scale(1.05);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.6);
+  z-index: 9998 !important;
+}

@@ -1,6 +1,7 @@
 /**
  * main.js
- * Application entry point: initializes state, connects UI, menus, shortcuts and stats.
+ * Application entry point: connects 1:1 reverse-engineered game engine, audio, UI,
+ * per-difficulty statistics, and keyboard shortcuts.
  */
 
 import { SpiderGame, DIFFICULTY } from './engine/SpiderGame.js';
@@ -28,49 +29,84 @@ class App {
     this.bindMenu();
     this.bindShortcuts();
 
-    // Hook game changes
+    // Hook game events
     this.game.onChange((event, data) => {
       if (event === 'undo') {
         this.renderer.render();
       } else if (event === 'move' || event === 'deal') {
         if (data.isWin) {
-          this.recordWin(this.game.score);
+          this.recordGameResult(true, this.game.score);
         }
       }
     });
 
-    // Initial render
     this.renderer.render();
+  }
+
+  getDiffKey(diff = this.game.difficulty) {
+    if (diff === DIFFICULTY.ONE_SUIT) return 'Easy';
+    if (diff === DIFFICULTY.TWO_SUITS) return 'Medium';
+    return 'Difficult';
   }
 
   loadStats() {
     try {
-      const data = localStorage.getItem('spider_stats');
+      const data = localStorage.getItem('spider_registry_stats');
       if (data) return JSON.parse(data);
     } catch (e) {}
-    return {
-      played: 0,
-      wins: 0,
+
+    const defaultDiff = () => ({
       highScore: 0,
-      maxStreak: 0,
-      currentStreak: 0
+      wins: 0,
+      losses: 0,
+      streakWins: 0,
+      streakLosses: 0,
+      streakCurrent: 0,
+      isWinStreak: true
+    });
+
+    return {
+      Easy: defaultDiff(),
+      Medium: defaultDiff(),
+      Difficult: defaultDiff()
     };
   }
 
   saveStats() {
-    localStorage.setItem('spider_stats', JSON.stringify(this.stats));
+    localStorage.setItem('spider_registry_stats', JSON.stringify(this.stats));
   }
 
-  recordWin(score) {
-    this.stats.played++;
-    this.stats.wins++;
-    this.stats.currentStreak++;
-    if (this.stats.currentStreak > this.stats.maxStreak) {
-      this.stats.maxStreak = this.stats.currentStreak;
+  recordGameResult(isWin, score = 0) {
+    const key = this.getDiffKey();
+    const s = this.stats[key];
+
+    if (isWin) {
+      s.wins++;
+      if (s.isWinStreak) {
+        s.streakCurrent++;
+      } else {
+        s.isWinStreak = true;
+        s.streakCurrent = 1;
+      }
+      if (s.streakCurrent > s.streakWins) {
+        s.streakWins = s.streakCurrent;
+      }
+      if (score > s.highScore) {
+        s.highScore = score;
+      }
+    } else {
+      s.losses++;
+      if (!s.isWinStreak) {
+        s.streakCurrent++;
+      } else {
+        s.isWinStreak = false;
+        s.streakCurrent = 1;
+      }
+      if (s.streakCurrent > s.streakLosses) {
+        s.streakLosses = s.streakCurrent;
+      }
     }
-    if (score > this.stats.highScore) {
-      this.stats.highScore = score;
-    }
+
     this.saveStats();
   }
 
@@ -79,18 +115,23 @@ class App {
       this.game.difficulty = diff;
       localStorage.setItem('spider_difficulty', diff);
     }
-    this.stats.played++;
-    this.saveStats();
 
     this.game.initGame();
     this.renderer.render();
-    this.audio.play('dealRound');
+    this.audio.play('deal');
   }
 
   bindWindowControls() {
     const btnClose = document.getElementById('btn-close');
     const btnMax = document.getElementById('btn-max');
     const btnMin = document.getElementById('btn-min');
+    const windowEl = document.querySelector('.xp-window');
+
+    if (btnMin) {
+      btnMin.addEventListener('click', () => {
+        windowEl.classList.toggle('minimized');
+      });
+    }
 
     if (btnMax) {
       btnMax.addEventListener('click', () => {
@@ -114,7 +155,6 @@ class App {
   bindMenu() {
     const menuItems = document.querySelectorAll('.xp-menu-item');
     
-    // Toggle menu dropdowns
     menuItems.forEach(item => {
       item.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -128,33 +168,41 @@ class App {
       menuItems.forEach(m => m.classList.remove('active'));
     });
 
-    // Menu Actions
     const actionMap = {
+      // String ID 3: "是否开始新游戏?"
       'new-game': () => {
         if (this.game.moves > 0 && !this.game.isWon) {
-          this.dialogs.showConfirm('新游戏', '是否开始新游戏?', () => this.startNewGame());
+          this.dialogs.showConfirm('新游戏', '是否开始新游戏?', () => {
+            this.recordGameResult(false);
+            this.startNewGame();
+          });
         } else {
           this.startNewGame();
         }
       },
+      // String ID 4: "是否从头开始这次游戏?"
       'restart': () => {
         this.dialogs.showConfirm('重新开始', '是否从头开始这次游戏?', () => {
+          this.recordGameResult(false);
           this.game.initGame();
           this.renderer.render();
-          this.audio.play('dealRound');
+          this.audio.play('deal');
         });
       },
       'undo': () => {
         if (this.game.canUndo()) {
           this.game.undo();
-          this.audio.play('click');
+          this.audio.play('drop');
         }
       },
-      'hint': () => {
-        const hint = this.game.findHint();
+      // FUN_01004dfb: Exact Hint logic & cycling
+      'hint': async () => {
+        const hint = this.game.getNextHint();
         if (hint) {
-          this.renderer.highlightHint(hint);
+          this.audio.play('hint'); // 126.wav
+          await this.renderer.playHintAnimation(hint);
         } else {
+          this.audio.play('noHint'); // 127.wav
           this.dialogs.showAlert('提示', '没有可用的移动，请点击右下角发牌区发新牌。');
         }
       },
@@ -163,12 +211,18 @@ class App {
       },
       'difficulty': () => {
         this.dialogs.showDifficulty(this.game.difficulty, (newDiff) => {
+          if (this.game.moves > 0 && !this.game.isWon) {
+            this.recordGameResult(false);
+          }
           this.startNewGame(newDiff);
         });
       },
       'stats': () => {
-        this.dialogs.showStats(this.stats, () => {
-          this.stats = { played: 0, wins: 0, highScore: 0, maxStreak: 0, currentStreak: 0 };
+        this.dialogs.showStats(this.stats, this.game.difficulty, () => {
+          const key = this.getDiffKey();
+          this.stats[key] = {
+            highScore: 0, wins: 0, losses: 0, streakWins: 0, streakLosses: 0, streakCurrent: 0, isWinStreak: true
+          };
           this.saveStats();
           this.dialogs.hide();
         });
@@ -204,27 +258,30 @@ class App {
   }
 
   bindShortcuts() {
-    window.addEventListener('keydown', (e) => {
+    window.addEventListener('keydown', async (e) => {
       // F2: New Game
       if (e.key === 'F2') {
         e.preventDefault();
-        this.startNewGame();
+        const action = document.querySelector('[data-action="new-game"]');
+        if (action) action.click();
       }
       // Ctrl+Z / Cmd+Z: Undo
       else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         if (this.game.canUndo()) {
           this.game.undo();
-          this.audio.play('click');
+          this.audio.play('drop');
         }
       }
-      // H or M: Hint
+      // H / M: Hint
       else if (e.key === 'h' || e.key === 'H' || e.key === 'm' || e.key === 'M') {
         e.preventDefault();
-        const hint = this.game.findHint();
+        const hint = this.game.getNextHint();
         if (hint) {
-          this.renderer.highlightHint(hint);
+          this.audio.play('hint');
+          await this.renderer.playHintAnimation(hint);
         } else {
+          this.audio.play('noHint');
           this.dialogs.showAlert('提示', '没有可用的移动，请点击发牌区发新牌。');
         }
       }
@@ -233,20 +290,25 @@ class App {
         e.preventDefault();
         this.interaction.handleStockClick();
       }
-      // F4: Statistics
+      // F4: Stats
       else if (e.key === 'F4') {
         e.preventDefault();
-        this.dialogs.showStats(this.stats);
+        const action = document.querySelector('[data-action="stats"]');
+        if (action) action.click();
       }
-      // Escape: close dialogs
+      // Escape: Boss Key (FUN_01006db6) or close dialog
       else if (e.key === 'Escape') {
-        this.dialogs.hide();
+        if (this.dialogs.overlay.classList.contains('show')) {
+          this.dialogs.hide();
+        } else {
+          // Classic Windows XP "Boss Key" minimize
+          document.querySelector('.xp-window').classList.toggle('minimized');
+        }
       }
     });
   }
 }
 
-// Bootstrap on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
   window.spiderApp = new App();
 });
