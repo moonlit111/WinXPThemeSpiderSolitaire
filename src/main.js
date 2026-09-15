@@ -1,10 +1,11 @@
 /**
  * main.js
  * Application entry point: connects 1:1 reverse-engineered game engine, audio, UI,
- * per-difficulty statistics, and keyboard shortcuts.
+ * Save/Load (spider.sav), per-difficulty statistics, and keyboard shortcuts.
  */
 
 import { SpiderGame, DIFFICULTY } from './engine/SpiderGame.js';
+import { Card } from './engine/Card.js';
 import { AudioService } from './engine/AudioService.js';
 import { Renderer } from './ui/Renderer.js';
 import { Dialogs } from './ui/Dialogs.js';
@@ -28,6 +29,10 @@ class App {
     this.bindWindowControls();
     this.bindMenu();
     this.bindShortcuts();
+    this.bindPersistence();
+
+    // Check if auto-saved game exists on launch
+    this.tryRestoreAutoSavedGame();
 
     // Hook game events
     this.game.onChange((event, data) => {
@@ -36,6 +41,7 @@ class App {
       } else if (event === 'move' || event === 'deal') {
         if (data.isWin) {
           this.recordGameResult(true, this.game.score);
+          localStorage.removeItem('spider_saved_game');
         }
       }
     });
@@ -110,12 +116,80 @@ class App {
     this.saveStats();
   }
 
+  saveCurrentGame() {
+    try {
+      const data = {
+        difficulty: this.game.difficulty,
+        columns: this.game.columns.map(col => col.map(c => ({ suit: c.suit, rank: c.rank, faceUp: c.faceUp, id: c.id }))),
+        stock: this.game.stock.map(c => ({ suit: c.suit, rank: c.rank, faceUp: c.faceUp, id: c.id })),
+        stockDealsLeft: this.game.stockDealsLeft,
+        completedSuits: [...this.game.completedSuits],
+        score: this.game.score,
+        moves: this.game.moves,
+        isWon: this.game.isWon
+      };
+      localStorage.setItem('spider_saved_game', JSON.stringify(data));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  loadSavedGame() {
+    try {
+      const json = localStorage.getItem('spider_saved_game');
+      if (!json) return false;
+      const data = JSON.parse(json);
+
+      this.game.difficulty = data.difficulty;
+      this.game.columns = data.columns.map(col => col.map(c => {
+        const card = new Card(c.suit, c.rank, c.faceUp);
+        card.id = c.id;
+        return card;
+      }));
+      this.game.stock = data.stock.map(c => {
+        const card = new Card(c.suit, c.rank, c.faceUp);
+        card.id = c.id;
+        return card;
+      });
+      this.game.stockDealsLeft = data.stockDealsLeft;
+      this.game.completedSuits = data.completedSuits;
+      this.game.score = data.score;
+      this.game.moves = data.moves;
+      this.game.isWon = data.isWon;
+      this.game.undoStack = [];
+      this.game.hintNeedsUpdate = true;
+
+      this.renderer.render();
+      this.audio.play('deal');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  tryRestoreAutoSavedGame() {
+    const json = localStorage.getItem('spider_saved_game');
+    if (json) {
+      this.loadSavedGame();
+    }
+  }
+
+  bindPersistence() {
+    // Auto-save on page close / refresh (FUN_0100411f: SaveOnExit)
+    window.addEventListener('beforeunload', () => {
+      if (this.game.moves > 0 && !this.game.isWon) {
+        this.saveCurrentGame();
+      }
+    });
+  }
+
   startNewGame(diff = null) {
     if (diff !== null) {
       this.game.difficulty = diff;
       localStorage.setItem('spider_difficulty', diff);
     }
-
+    localStorage.removeItem('spider_saved_game');
     this.game.initGame();
     this.renderer.render();
     this.audio.play('deal');
@@ -146,6 +220,9 @@ class App {
     if (btnClose) {
       btnClose.addEventListener('click', () => {
         this.dialogs.showConfirm('退出', '是否退出蜘蛛纸牌?', () => {
+          if (this.game.moves > 0 && !this.game.isWon) {
+            this.saveCurrentGame();
+          }
           window.close();
         });
       });
@@ -169,7 +246,6 @@ class App {
     });
 
     const actionMap = {
-      // String ID 3: "是否开始新游戏?"
       'new-game': () => {
         if (this.game.moves > 0 && !this.game.isWon) {
           this.dialogs.showConfirm('新游戏', '是否开始新游戏?', () => {
@@ -180,7 +256,6 @@ class App {
           this.startNewGame();
         }
       },
-      // String ID 4: "是否从头开始这次游戏?"
       'restart': () => {
         this.dialogs.showConfirm('重新开始', '是否从头开始这次游戏?', () => {
           this.recordGameResult(false);
@@ -191,12 +266,31 @@ class App {
       },
       'undo': () => {
         if (this.game.canUndo()) {
+          this.interaction.clearSelection();
           this.game.undo();
           this.audio.play('drop');
         }
       },
-      // FUN_01004dfb: Exact Hint logic & cycling
+      'save-game': () => {
+        const ok = this.saveCurrentGame();
+        if (ok) {
+          this.dialogs.showAlert('保存游戏', '游戏已成功保存。');
+        } else {
+          this.dialogs.showAlert('保存游戏', '无法保存游戏。');
+        }
+      },
+      'load-game': () => {
+        if (localStorage.getItem('spider_saved_game')) {
+          this.dialogs.showConfirm('打开游戏', '是否放弃当前正在玩的游戏，加载上次保存的游戏?', () => {
+            const ok = this.loadSavedGame();
+            if (!ok) this.dialogs.showAlert('打开游戏', '无法加载游戏。');
+          });
+        } else {
+          this.dialogs.showAlert('打开游戏', '没有找到保存的游戏。');
+        }
+      },
       'hint': async () => {
+        this.interaction.clearSelection();
         const hint = this.game.getNextHint();
         if (hint) {
           this.audio.play('hint'); // 126.wav
@@ -269,21 +363,28 @@ class App {
       else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         if (this.game.canUndo()) {
+          this.interaction.clearSelection();
           this.game.undo();
           this.audio.play('drop');
         }
       }
+      // Ctrl+S / Cmd+S: Save Game
+      else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="save-game"]');
+        if (action) action.click();
+      }
+      // Ctrl+O / Cmd+O: Load Game
+      else if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault();
+        const action = document.querySelector('[data-action="load-game"]');
+        if (action) action.click();
+      }
       // H / M: Hint
       else if (e.key === 'h' || e.key === 'H' || e.key === 'm' || e.key === 'M') {
         e.preventDefault();
-        const hint = this.game.getNextHint();
-        if (hint) {
-          this.audio.play('hint');
-          await this.renderer.playHintAnimation(hint);
-        } else {
-          this.audio.play('noHint');
-          this.dialogs.showAlert('提示', '没有可用的移动，请点击发牌区发新牌。');
-        }
+        const action = document.querySelector('[data-action="hint"]');
+        if (action) action.click();
       }
       // D: Deal
       else if (e.key === 'd' || e.key === 'D') {
@@ -301,7 +402,6 @@ class App {
         if (this.dialogs.overlay.classList.contains('show')) {
           this.dialogs.hide();
         } else {
-          // Classic Windows XP "Boss Key" minimize
           document.querySelector('.xp-window').classList.toggle('minimized');
         }
       }

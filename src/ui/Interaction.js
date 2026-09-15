@@ -1,10 +1,13 @@
 /**
  * Interaction.js
- * Handles mouse and touch drag-and-drop, smart click-to-move, right-click peek, and stock dealing.
- * Matches original Windows XP input messages:
- * - WM_LBUTTONDOWN (FUN_01005753 -> PlaySoundW 0x80 / 128.wav)
- * - WM_LBUTTONUP (FUN_01006732 -> PlaySoundW 0x7d / 125.wav)
- * - WM_RBUTTONDOWN / WM_RBUTTONUP (FUN_01003712 / FUN_010059a6 -> Peek card)
+ * 1:1 Windows XP Spider Solitaire Interaction Engine
+ * Implements:
+ * - Iconic GDI InvertRect selection on card click / press
+ * - Dual mode: Click-to-Select (inverted) -> Click-to-Place, OR Drag-and-Drop
+ * - Double-click smart auto-move
+ * - Right-click peek (FUN_01003712 / FUN_010059a6)
+ * - Bottom area click to trigger Hint (FUN_01003811)
+ * - Stock deal with sequential sound (FUN_010069b2 / AnimDeal)
  */
 
 export class Interaction {
@@ -16,8 +19,11 @@ export class Interaction {
     this.victoryAnim = victoryAnim;
 
     this.dragLayer = document.getElementById('drag-layer');
+    this.bottomHintBtn = document.getElementById('bottom-hint-btn');
+
     this.activeDrag = null;
     this.peekingEl = null;
+    this.selectedCards = null; // { col, cardIdx, elements }
 
     this.bindEvents();
   }
@@ -26,33 +32,82 @@ export class Interaction {
     // 1. Stock pile click
     this.renderer.stockEl.addEventListener('click', () => this.handleStockClick());
 
-    // 2. Prevent right-click context menu on tableau
+    // 2. Bottom hint trigger (FUN_01003811)
+    if (this.bottomHintBtn) {
+      this.bottomHintBtn.addEventListener('click', () => {
+        const hintAction = document.querySelector('[data-action="hint"]');
+        if (hintAction) hintAction.click();
+      });
+    }
+
+    // 3. Prevent context menu on tableau
     this.renderer.tableauEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // 3. Pointer events
+    // 4. Pointer events
     this.renderer.tableauEl.addEventListener('pointerdown', (e) => this.onPointerDown(e));
     window.addEventListener('pointermove', (e) => this.onPointerMove(e));
     window.addEventListener('pointerup', (e) => this.onPointerUp(e));
     window.addEventListener('pointercancel', (e) => this.onPointerCancel(e));
+
+    // 5. Double click for smart auto-move
+    this.renderer.tableauEl.addEventListener('dblclick', (e) => this.onDoubleClick(e));
+
+    // 6. Click on empty felt to deselect
+    this.renderer.tableauEl.addEventListener('click', (e) => {
+      if (!e.target.closest('.card-element') && this.selectedCards) {
+        this.clearSelection();
+        this.audio.play('drop');
+      }
+    });
   }
 
-  handleStockClick() {
+  clearSelection() {
+    if (this.selectedCards) {
+      this.selectedCards.elements.forEach(el => el.classList.remove('selected-inverted'));
+      this.selectedCards = null;
+    }
+  }
+
+  setSelection(fromCol, cardIdx) {
+    this.clearSelection();
+    const colEl = this.renderer.columnEls[fromCol];
+    if (!colEl) return;
+
+    const movingEls = Array.from(colEl.querySelectorAll('.card-element')).filter(
+      el => parseInt(el.dataset.cardIdx) >= cardIdx
+    );
+
+    // Apply iconic Windows GDI InvertRect selection
+    movingEls.forEach(el => el.classList.add('selected-inverted'));
+
+    this.selectedCards = {
+      col: fromCol,
+      cardIdx,
+      elements: movingEls
+    };
+
+    this.audio.play('grab'); // 128.wav on select
+  }
+
+  async handleStockClick() {
     const check = this.game.canDeal();
     if (!check.canDeal) {
       if (check.reason === 'EMPTY_COLUMN') {
-        this.audio.play('noHint'); // 127.wav error thud
+        this.audio.play('noHint'); // 127.wav
         this.dialogs.showAlert('蜘蛛纸牌', '有空位时不允许发牌。'); // String ID 5
       }
       return;
     }
 
+    this.clearSelection();
     const result = this.game.dealRound();
     if (result.success) {
       this.audio.play('deal'); // 124.wav
-      if (result.completedRuns.length > 0) {
-        setTimeout(() => this.audio.play('deal'), 300); // 124.wav on run collection
-      }
       this.renderer.render();
+
+      if (result.completedRuns.length > 0) {
+        setTimeout(() => this.audio.play('deal'), 300);
+      }
 
       if (result.isWin) {
         this.handleWin();
@@ -62,28 +117,58 @@ export class Interaction {
 
   onPointerDown(e) {
     const cardEl = e.target.closest('.card-element');
-    if (!cardEl) return;
 
     // Right-click peek (FUN_01003712)
     if (e.button === 2) {
-      this.peekingEl = cardEl;
-      cardEl.classList.add('peeking');
+      if (cardEl) {
+        this.peekingEl = cardEl;
+        cardEl.classList.add('peeking');
+      }
       return;
     }
 
-    // Only left click starts drag
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    // Clicked on empty column slot
+    const emptyColEl = e.target.closest('.tableau-column');
+    if (!cardEl && emptyColEl) {
+      const colIdx = parseInt(emptyColEl.dataset.col);
+      if (this.selectedCards && this.game.canMove(this.selectedCards.col, this.selectedCards.cardIdx, colIdx)) {
+        this.executeMove(this.selectedCards.col, this.selectedCards.cardIdx, colIdx);
+        return;
+      }
+    }
+
+    if (!cardEl) return;
 
     const fromCol = parseInt(cardEl.dataset.col);
     const cardIdx = parseInt(cardEl.dataset.cardIdx);
 
-    if (!this.game.isSequenceMovable(fromCol, cardIdx)) return;
+    // Check if player has an existing selection and clicked a different column
+    if (this.selectedCards && this.selectedCards.col !== fromCol) {
+      if (this.game.canMove(this.selectedCards.col, this.selectedCards.cardIdx, fromCol)) {
+        this.executeMove(this.selectedCards.col, this.selectedCards.cardIdx, fromCol);
+        return;
+      }
+    }
 
+    if (!this.game.isSequenceMovable(fromCol, cardIdx)) {
+      if (this.selectedCards) {
+        this.clearSelection();
+        this.audio.play('noHint');
+      }
+      return;
+    }
+
+    // Prepare drag & immediate inverted visual feedback
     const cardRect = cardEl.getBoundingClientRect();
     const colEl = this.renderer.columnEls[fromCol];
     const movingEls = Array.from(colEl.querySelectorAll('.card-element')).filter(
       el => parseInt(el.dataset.cardIdx) >= cardIdx
     );
+
+    // Show immediate InvertRect on press!
+    movingEls.forEach(el => el.classList.add('selected-inverted'));
 
     this.activeDrag = {
       fromCol,
@@ -96,11 +181,11 @@ export class Interaction {
       cardHeight: cardRect.height,
       movingEls,
       isDragging: false,
-      dragGroup: null
+      dragGroup: null,
+      wasAlreadySelected: this.selectedCards && this.selectedCards.col === fromCol && this.selectedCards.cardIdx === cardIdx
     };
 
-    // spri.exe WM_LBUTTONDOWN -> PlaySoundW 0x80 (128.wav, card pickup click)
-    this.audio.play('grab');
+    this.audio.play('grab'); // 128.wav
     e.preventDefault();
   }
 
@@ -126,7 +211,7 @@ export class Interaction {
 
   initDragGroup(e) {
     const dragGroup = document.createElement('div');
-    dragGroup.className = 'drag-group';
+    dragGroup.className = 'drag-group selected-inverted';
     dragGroup.style.width = `${this.activeDrag.cardWidth}px`;
     dragGroup.style.height = `${this.activeDrag.cardHeight}px`;
 
@@ -139,6 +224,7 @@ export class Interaction {
       clone.style.top = `${rect.top - firstRect.top}px`;
       clone.style.left = '0px';
       clone.style.transition = 'none';
+      clone.classList.add('selected-inverted');
       dragGroup.appendChild(clone);
       el.style.opacity = '0';
     });
@@ -152,7 +238,6 @@ export class Interaction {
   }
 
   onPointerUp(e) {
-    // Release right click peek (FUN_010059a6)
     if (this.peekingEl) {
       this.peekingEl.classList.remove('peeking');
       this.peekingEl = null;
@@ -160,34 +245,37 @@ export class Interaction {
 
     if (!this.activeDrag) return;
 
-    const { fromCol, cardIdx, isDragging, dragGroup } = this.activeDrag;
+    const { fromCol, cardIdx, isDragging, dragGroup, movingEls, wasAlreadySelected } = this.activeDrag;
 
     if (!isDragging) {
-      // Smart Click-to-Move
-      this.handleSmartClickMove(fromCol, cardIdx);
+      // User tapped / clicked!
+      if (wasAlreadySelected) {
+        // Clicked the same selected card -> Deselect!
+        this.clearSelection();
+        this.audio.play('drop');
+      } else {
+        // Keep selected & INVERTED!
+        this.setSelection(fromCol, cardIdx);
+      }
       this.activeDrag = null;
       return;
     }
 
+    // Drag release: find target column
     const targetCol = this.findDropTarget(e.clientX, e.clientY);
 
     if (targetCol !== null && this.game.canMove(fromCol, cardIdx, targetCol)) {
-      const res = this.game.moveCards(fromCol, cardIdx, targetCol);
-      if (res.success) {
-        // spri.exe WM_LBUTTONUP -> PlaySoundW 0x7d (125.wav, drop snap)
-        this.audio.play('drop');
-        if (res.completedRun) {
-          setTimeout(() => this.audio.play('deal'), 200); // 124.wav on run cleared
-        }
-        if (dragGroup) dragGroup.remove();
-        this.renderer.render();
-
-        if (res.isWin) {
-          this.handleWin();
-        }
-      }
+      if (dragGroup) dragGroup.remove();
+      this.executeMove(fromCol, cardIdx, targetCol);
     } else {
-      this.cancelDrag();
+      // Invalid drop: snap back and remove inversion
+      movingEls.forEach(el => {
+        el.classList.remove('selected-inverted');
+        el.style.opacity = '1';
+      });
+      if (dragGroup) dragGroup.remove();
+      this.clearSelection();
+      this.audio.play('noHint');
     }
 
     this.activeDrag = null;
@@ -199,15 +287,13 @@ export class Interaction {
       this.peekingEl = null;
     }
     if (this.activeDrag) {
-      this.cancelDrag();
+      if (this.activeDrag.dragGroup) this.activeDrag.dragGroup.remove();
+      this.activeDrag.movingEls.forEach(el => {
+        el.classList.remove('selected-inverted');
+        el.style.opacity = '1';
+      });
+      this.clearSelection();
       this.activeDrag = null;
-    }
-  }
-
-  cancelDrag() {
-    if (this.activeDrag && this.activeDrag.dragGroup) {
-      this.activeDrag.dragGroup.remove();
-      this.activeDrag.movingEls.forEach(el => el.style.opacity = '1');
     }
   }
 
@@ -219,7 +305,7 @@ export class Interaction {
       const colEl = this.renderer.columnEls[c];
       const rect = colEl.getBoundingClientRect();
 
-      if (clientX >= rect.left - 10 && clientX <= rect.right + 10) {
+      if (clientX >= rect.left - 15 && clientX <= rect.right + 15) {
         if (clientY >= rect.top - 20 && clientY <= rect.bottom + 100) {
           return c;
         }
@@ -227,7 +313,7 @@ export class Interaction {
 
       const colCenterX = rect.left + rect.width / 2;
       const dist = Math.abs(clientX - colCenterX);
-      if (dist < minDistance && dist < rect.width * 1.2) {
+      if (dist < minDistance && dist < rect.width * 1.3) {
         minDistance = dist;
         bestCol = c;
       }
@@ -236,7 +322,34 @@ export class Interaction {
     return bestCol;
   }
 
-  handleSmartClickMove(fromCol, cardIdx) {
+  executeMove(fromCol, cardIdx, toCol) {
+    this.clearSelection();
+    const res = this.game.moveCards(fromCol, cardIdx, toCol);
+    if (res.success) {
+      this.audio.play('drop'); // 125.wav
+      if (res.completedRun) {
+        setTimeout(() => this.audio.play('deal'), 200); // 124.wav on run cleared
+      }
+      this.renderer.render();
+
+      if (res.isWin) {
+        this.handleWin();
+      }
+    }
+  }
+
+  /**
+   * Double-click on card: instantly smart-move to best column
+   */
+  onDoubleClick(e) {
+    const cardEl = e.target.closest('.card-element');
+    if (!cardEl) return;
+
+    const fromCol = parseInt(cardEl.dataset.col);
+    const cardIdx = parseInt(cardEl.dataset.cardIdx);
+
+    if (!this.game.isSequenceMovable(fromCol, cardIdx)) return;
+
     const movingCard = this.game.columns[fromCol][cardIdx];
     let bestTarget = null;
     let highestPriority = -1;
@@ -249,11 +362,7 @@ export class Interaction {
 
         if (targetCol.length > 0) {
           const targetTop = targetCol[targetCol.length - 1];
-          if (targetTop.suit === movingCard.suit) {
-            priority = 100; // Same suit
-          } else {
-            priority = 50;  // Different suit
-          }
+          priority = (targetTop.suit === movingCard.suit) ? 100 : 50;
         } else {
           if (cardIdx > 0 && !this.game.columns[fromCol][cardIdx - 1].faceUp) {
             priority = 30;
@@ -270,18 +379,7 @@ export class Interaction {
     }
 
     if (bestTarget !== null) {
-      const res = this.game.moveCards(fromCol, cardIdx, bestTarget);
-      if (res.success) {
-        this.audio.play('drop');
-        if (res.completedRun) {
-          setTimeout(() => this.audio.play('deal'), 200);
-        }
-        this.renderer.render();
-
-        if (res.isWin) {
-          this.handleWin();
-        }
-      }
+      this.executeMove(fromCol, cardIdx, bestTarget);
     }
   }
 

@@ -216,3 +216,59 @@
   box-shadow: 0 8px 16px rgba(0,0,0,0.6);
   z-index: 9998 !important;
 }
+
+/* 1:1 Windows GDI InvertRect Selection */
+.card-element.selected-inverted,
+.card-element.selected-inverted img,
+.drag-group.selected-inverted,
+.drag-group.selected-inverted .card-element,
+.drag-group.selected-inverted img {
+  filter: invert(1) !important;
+  -webkit-filter: invert(1) !important;
+}
+
+.bottom-hint-area {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.bottom-hint-area:hover {
+  opacity: 1;
+}
+
+.bottom-hint-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  padding: 4px 12px;
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.bottom-hint-area:hover .bottom-hint-label {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Card deal flight animation */
+@keyframes card-deal-fly {
+  from {
+    transform: translate(calc(var(--deal-from-x, 200px) - var(--deal-to-x, 0px)), calc(var(--deal-from-y, 400px) - var(--deal-to-y, 0px))) scale(0.9);
+    opacity: 0.8;
+  }
+  to {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+.card-element.dealing-in {
+  animation: card-deal-fly 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}

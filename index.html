@@ -44,6 +44,14 @@
             <span>撤销(<u>U</u>)</span>
             <span class="xp-dropdown-shortcut">Ctrl+Z</span>
           </div>
+          <div class="xp-dropdown-row" data-action="save-game">
+            <span>保存游戏(<u>S</u>)</span>
+            <span class="xp-dropdown-shortcut">Ctrl+S</span>
+          </div>
+          <div class="xp-dropdown-row" data-action="load-game">
+            <span>打开保存的游戏(<u>O</u>)...</span>
+            <span class="xp-dropdown-shortcut">Ctrl+O</span>
+          </div>
           <div class="xp-dropdown-row" data-action="deal">
             <span>发牌(<u>D</u>)</span>
             <span class="xp-dropdown-shortcut">D</span>
@@ -93,6 +101,9 @@
       <!-- Bottom Bar: Foundations (Left) & Stock Pile (Right) -->
       <div class="bottom-area">
         <div class="foundation-area" title="已完成的花色牌组"></div>
+        <div class="bottom-hint-area" id="bottom-hint-btn" title="点击获取走法提示 (H)">
+          <span class="bottom-hint-label">提示 (H)</span>
+        </div>
         <div class="stock-area" title="点击发新一轮牌 (D)"></div>
       </div>
 
