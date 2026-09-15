@@ -1,0 +1,205 @@
+/* Spider Solitaire Game Board & Card Styles */
+
+:root {
+  --card-width: 71px;
+  --card-height: 96px;
+  --card-radius: 4px;
+}
+
+@media (min-width: 1000px) and (min-height: 700px) {
+  :root {
+    --card-width: 80px;
+    --card-height: 108px;
+  }
+}
+
+.game-container {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background-color: #006633;
+  background-image: url('../assets/ui/FELT.png');
+  background-repeat: repeat;
+  overflow: hidden;
+  padding: 10px 16px;
+}
+
+/* 10 Tableau Columns Area */
+.tableau-area {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8px;
+  position: relative;
+  min-height: 380px;
+}
+
+.tableau-column {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Empty Column Slot Outline */
+.column-slot {
+  width: var(--card-width);
+  height: var(--card-height);
+  position: absolute;
+  top: 0;
+  border-radius: var(--card-radius);
+  background-image: url('../assets/ui/108.png');
+  background-size: cover;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Card Element */
+.card-element {
+  width: var(--card-width);
+  height: var(--card-height);
+  position: absolute;
+  border-radius: var(--card-radius);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.45);
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  touch-action: none;
+}
+
+.card-element img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: var(--card-radius);
+  pointer-events: none;
+}
+
+.card-element.face-down {
+  cursor: default;
+}
+
+.card-element.movable:hover {
+  filter: brightness(1.06);
+}
+
+.card-element.hinted {
+  outline: 3px solid #ffea00;
+  box-shadow: 0 0 12px #ffea00;
+  animation: hint-pulse 0.8s infinite alternate ease-in-out;
+}
+
+@keyframes hint-pulse {
+  0% { transform: translateY(0px) scale(1); }
+  100% { transform: translateY(-4px) scale(1.04); }
+}
+
+/* Bottom Deck / Foundation Area */
+.bottom-area {
+  height: calc(var(--card-height) + 12px);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 4px 10px;
+  position: relative;
+  z-index: 10;
+}
+
+/* Foundation (Left): 8 completed suits */
+.foundation-area {
+  display: flex;
+  gap: 6px;
+  height: var(--card-height);
+  align-items: center;
+}
+
+.foundation-slot {
+  width: calc(var(--card-width) * 0.7);
+  height: calc(var(--card-height) * 0.7);
+  border-radius: var(--card-radius);
+  position: relative;
+}
+
+.foundation-slot img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--card-radius);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Stock Pile (Right): 5 deals of 10 cards */
+.stock-area {
+  display: flex;
+  position: relative;
+  width: calc(var(--card-width) + 36px);
+  height: var(--card-height);
+  cursor: pointer;
+}
+
+.stock-card {
+  width: var(--card-width);
+  height: var(--card-height);
+  position: absolute;
+  top: 0;
+  border-radius: var(--card-radius);
+  box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.1s ease;
+}
+
+.stock-card img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--card-radius);
+  pointer-events: none;
+}
+
+.stock-area:hover .stock-card {
+  filter: brightness(1.08);
+}
+
+.stock-empty-hint {
+  width: var(--card-width);
+  height: var(--card-height);
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  border-radius: var(--card-radius);
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Dragging Floating Layer */
+#drag-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.drag-group {
+  position: absolute;
+  pointer-events: none;
+  filter: drop-shadow(4px 8px 14px rgba(0, 0, 0, 0.5));
+}
+
+.drag-group .card-element {
+  position: absolute;
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Victory Fireworks / Cascade Canvas */
+#victory-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5000;
+  display: none;
+}

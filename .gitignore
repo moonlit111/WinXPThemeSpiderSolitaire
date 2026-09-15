@@ -1,0 +1,5 @@
+.DS_Store
+*.rar
+sprider/
+extracted_assets/
+node_modules/

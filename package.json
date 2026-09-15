@@ -1,0 +1,13 @@
+{
+  "name": "spider-solitaire",
+  "version": "1.0.0",
+  "description": "Windows XP Spider Solitaire 1:1 Recreation",
+  "type": "module",
+  "scripts": {
+    "test": "node test/engine.test.js",
+    "start": "python3 -m http.server 8080"
+  },
+  "keywords": ["spider-solitaire", "windows-xp", "cards", "game"],
+  "author": "",
+  "license": "MIT"
+}
