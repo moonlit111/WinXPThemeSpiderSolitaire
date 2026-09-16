@@ -847,7 +847,7 @@ class Renderer {
     for (let i = 0; i < dealsLeft; i++) {
       const cardEl = document.createElement('div');
       cardEl.className = 'stock-card';
-      cardEl.style.left = `${i * 8}px`;
+      cardEl.style.left = `${i * 12}px`; // 12px step (FUN_01002af5)
       cardEl.style.zIndex = i + 1;
 
       const img = document.createElement('img');
@@ -864,31 +864,32 @@ class Renderer {
     this.foundationEl.innerHTML = '';
     const suits = this.game.completedSuits;
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < suits.length; i++) {
+      const suit = suits[i];
       const slot = document.createElement('div');
       slot.className = 'foundation-slot';
+      slot.style.left = `${i * 12}px`; // 12px step (FUN_010038c3)
+      slot.style.zIndex = i + 1;
 
-      if (i < suits.length) {
-        const suit = suits[i];
-        const kingImgIndex = 1 + suit * 13 + 12; // King card index
-        const img = document.createElement('img');
-        img.src = `assets/cards/CARD${kingImgIndex}.png`;
-        img.alt = `Completed Suit ${i + 1}`;
-        img.draggable = false;
-        slot.appendChild(img);
-      }
+      const kingImgIndex = 1 + suit * 13 + 12; // King card index
+      const img = document.createElement('img');
+      img.src = `assets/cards/CARD${kingImgIndex}.png`;
+      img.alt = `Completed Suit ${i + 1}`;
+      img.draggable = false;
+      slot.appendChild(img);
+
       this.foundationEl.appendChild(slot);
     }
   }
 
   renderStatusBar() {
-    if (this.scoreEl) this.scoreEl.textContent = `分数: ${this.game.score}`;
-    if (this.movesEl) this.movesEl.textContent = `操作: ${this.game.moves}`;
+    if (this.scoreEl) this.scoreEl.textContent = this.game.score;
+    if (this.movesEl) this.movesEl.textContent = this.game.moves;
   }
 
   /**
    * Exact 1:1 InvertRect hint animation from FUN_01004dfb:
-   * 1. Invert/highlight source card for 250ms (Sleep 0xfa), un-invert.
+   * 1. Invert/highlight moving card sequence for 250ms (Sleep 0xfa), un-invert.
    * 2. Invert/highlight destination card/slot for 250ms (Sleep 0xfa), un-invert.
    */
   async playHintAnimation(hint) {
@@ -899,14 +900,17 @@ class Renderer {
     const toColEl = this.columnEls[hint.toCol];
     if (!fromColEl || !toColEl) return;
 
-    const sourceCardEl = fromColEl.querySelector(`[data-card-idx="${hint.cardIndex}"]`);
+    // Invert ALL cards in the moving sequence from fromCol (FUN_01002cf0)
+    const sourceCardEls = Array.from(fromColEl.querySelectorAll('.card-element')).filter(
+      el => parseInt(el.dataset.cardIdx) >= hint.cardIndex
+    );
     const targetCards = toColEl.querySelectorAll('.card-element');
     const targetEl = targetCards.length > 0 ? targetCards[targetCards.length - 1] : toColEl.querySelector('.column-slot');
 
-    if (sourceCardEl) {
-      sourceCardEl.classList.add('hint-inverted');
+    if (sourceCardEls.length > 0) {
+      sourceCardEls.forEach(el => el.classList.add('hint-inverted'));
       await new Promise(r => setTimeout(r, 250)); // 250ms
-      sourceCardEl.classList.remove('hint-inverted');
+      sourceCardEls.forEach(el => el.classList.remove('hint-inverted'));
     }
 
     if (targetEl) {
@@ -1287,11 +1291,15 @@ class Interaction {
     // 1. Stock pile click
     this.renderer.stockEl.addEventListener('click', () => this.handleStockClick());
 
-    // 2. Bottom hint trigger (FUN_01003811)
+    // 2. Bottom hint trigger (FUN_01003811 / FUN_01004a10)
     if (this.bottomHintBtn) {
-      this.bottomHintBtn.addEventListener('click', () => {
-        const hintAction = document.querySelector('[data-action="hint"]');
-        if (hintAction) hintAction.click();
+      this.bottomHintBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.triggerHint();
+      });
+      this.bottomHintBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
       });
     }
 
@@ -1367,6 +1375,22 @@ class Interaction {
       if (result.isWin) {
         this.handleWin();
       }
+    }
+  }
+
+  /**
+   * Exact 1:1 Hint trigger from FUN_01004dfb:
+   * Plays 126.wav and animates if move exists, or plays 127.wav if no moves available.
+   * No alert dialog is shown on no hint (matches authentic Windows XP behavior).
+   */
+  async triggerHint() {
+    this.clearSelection();
+    const hint = this.game.getNextHint();
+    if (hint) {
+      this.audio.play('hint'); // 126.wav
+      await this.renderer.playHintAnimation(hint);
+    } else {
+      this.audio.play('noHint'); // 127.wav
     }
   }
 
@@ -1979,16 +2003,8 @@ class App {
           this.dialogs.showAlert('打开游戏', '没有找到保存的游戏。');
         }
       },
-      'hint': async () => {
-        this.interaction.clearSelection();
-        const hint = this.game.getNextHint();
-        if (hint) {
-          this.audio.play('hint'); // 126.wav
-          await this.renderer.playHintAnimation(hint);
-        } else {
-          this.audio.play('noHint'); // 127.wav
-          this.dialogs.showAlert('提示', '没有可用的移动，请点击右下角发牌区发新牌。');
-        }
+      'hint': () => {
+        this.interaction.triggerHint();
       },
       'deal': () => {
         this.interaction.handleStockClick();
@@ -2112,8 +2128,7 @@ class App {
       // H / M: Hint
       else if (e.key === 'h' || e.key === 'H' || e.key === 'm' || e.key === 'M') {
         e.preventDefault();
-        const action = document.querySelector('[data-action="hint"]');
-        if (action) action.click();
+        this.interaction.triggerHint();
       }
       // D: Deal
       else if (e.key === 'd' || e.key === 'D') {

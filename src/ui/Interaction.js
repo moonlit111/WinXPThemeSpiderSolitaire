@@ -32,11 +32,15 @@ export class Interaction {
     // 1. Stock pile click
     this.renderer.stockEl.addEventListener('click', () => this.handleStockClick());
 
-    // 2. Bottom hint trigger (FUN_01003811)
+    // 2. Bottom hint trigger (FUN_01003811 / FUN_01004a10)
     if (this.bottomHintBtn) {
-      this.bottomHintBtn.addEventListener('click', () => {
-        const hintAction = document.querySelector('[data-action="hint"]');
-        if (hintAction) hintAction.click();
+      this.bottomHintBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.triggerHint();
+      });
+      this.bottomHintBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
       });
     }
 
@@ -112,6 +116,22 @@ export class Interaction {
       if (result.isWin) {
         this.handleWin();
       }
+    }
+  }
+
+  /**
+   * Exact 1:1 Hint trigger from FUN_01004dfb:
+   * Plays 126.wav and animates if move exists, or plays 127.wav if no moves available.
+   * No alert dialog is shown on no hint (matches authentic Windows XP behavior).
+   */
+  async triggerHint() {
+    this.clearSelection();
+    const hint = this.game.getNextHint();
+    if (hint) {
+      this.audio.play('hint'); // 126.wav
+      await this.renderer.playHintAnimation(hint);
+    } else {
+      this.audio.play('noHint'); // 127.wav
     }
   }
 

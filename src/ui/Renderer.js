@@ -116,7 +116,7 @@ export class Renderer {
     for (let i = 0; i < dealsLeft; i++) {
       const cardEl = document.createElement('div');
       cardEl.className = 'stock-card';
-      cardEl.style.left = `${i * 8}px`;
+      cardEl.style.left = `${i * 12}px`; // 12px step (FUN_01002af5)
       cardEl.style.zIndex = i + 1;
 
       const img = document.createElement('img');
@@ -133,31 +133,32 @@ export class Renderer {
     this.foundationEl.innerHTML = '';
     const suits = this.game.completedSuits;
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < suits.length; i++) {
+      const suit = suits[i];
       const slot = document.createElement('div');
       slot.className = 'foundation-slot';
+      slot.style.left = `${i * 12}px`; // 12px step (FUN_010038c3)
+      slot.style.zIndex = i + 1;
 
-      if (i < suits.length) {
-        const suit = suits[i];
-        const kingImgIndex = 1 + suit * 13 + 12; // King card index
-        const img = document.createElement('img');
-        img.src = `assets/cards/CARD${kingImgIndex}.png`;
-        img.alt = `Completed Suit ${i + 1}`;
-        img.draggable = false;
-        slot.appendChild(img);
-      }
+      const kingImgIndex = 1 + suit * 13 + 12; // King card index
+      const img = document.createElement('img');
+      img.src = `assets/cards/CARD${kingImgIndex}.png`;
+      img.alt = `Completed Suit ${i + 1}`;
+      img.draggable = false;
+      slot.appendChild(img);
+
       this.foundationEl.appendChild(slot);
     }
   }
 
   renderStatusBar() {
-    if (this.scoreEl) this.scoreEl.textContent = `分数: ${this.game.score}`;
-    if (this.movesEl) this.movesEl.textContent = `操作: ${this.game.moves}`;
+    if (this.scoreEl) this.scoreEl.textContent = this.game.score;
+    if (this.movesEl) this.movesEl.textContent = this.game.moves;
   }
 
   /**
    * Exact 1:1 InvertRect hint animation from FUN_01004dfb:
-   * 1. Invert/highlight source card for 250ms (Sleep 0xfa), un-invert.
+   * 1. Invert/highlight moving card sequence for 250ms (Sleep 0xfa), un-invert.
    * 2. Invert/highlight destination card/slot for 250ms (Sleep 0xfa), un-invert.
    */
   async playHintAnimation(hint) {
@@ -168,14 +169,17 @@ export class Renderer {
     const toColEl = this.columnEls[hint.toCol];
     if (!fromColEl || !toColEl) return;
 
-    const sourceCardEl = fromColEl.querySelector(`[data-card-idx="${hint.cardIndex}"]`);
+    // Invert ALL cards in the moving sequence from fromCol (FUN_01002cf0)
+    const sourceCardEls = Array.from(fromColEl.querySelectorAll('.card-element')).filter(
+      el => parseInt(el.dataset.cardIdx) >= hint.cardIndex
+    );
     const targetCards = toColEl.querySelectorAll('.card-element');
     const targetEl = targetCards.length > 0 ? targetCards[targetCards.length - 1] : toColEl.querySelector('.column-slot');
 
-    if (sourceCardEl) {
-      sourceCardEl.classList.add('hint-inverted');
+    if (sourceCardEls.length > 0) {
+      sourceCardEls.forEach(el => el.classList.add('hint-inverted'));
       await new Promise(r => setTimeout(r, 250)); // 250ms
-      sourceCardEl.classList.remove('hint-inverted');
+      sourceCardEls.forEach(el => el.classList.remove('hint-inverted'));
     }
 
     if (targetEl) {

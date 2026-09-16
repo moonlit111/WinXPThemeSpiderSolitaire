@@ -332,16 +332,8 @@ class App {
           this.dialogs.showAlert('打开游戏', '没有找到保存的游戏。');
         }
       },
-      'hint': async () => {
-        this.interaction.clearSelection();
-        const hint = this.game.getNextHint();
-        if (hint) {
-          this.audio.play('hint'); // 126.wav
-          await this.renderer.playHintAnimation(hint);
-        } else {
-          this.audio.play('noHint'); // 127.wav
-          this.dialogs.showAlert('提示', '没有可用的移动，请点击右下角发牌区发新牌。');
-        }
+      'hint': () => {
+        this.interaction.triggerHint();
       },
       'deal': () => {
         this.interaction.handleStockClick();
@@ -465,8 +457,7 @@ class App {
       // H / M: Hint
       else if (e.key === 'h' || e.key === 'H' || e.key === 'm' || e.key === 'M') {
         e.preventDefault();
-        const action = document.querySelector('[data-action="hint"]');
-        if (action) action.click();
+        this.interaction.triggerHint();
       }
       // D: Deal
       else if (e.key === 'd' || e.key === 'D') {
