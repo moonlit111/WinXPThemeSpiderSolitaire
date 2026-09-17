@@ -304,12 +304,38 @@ class App {
     }
 
     if (btnMax) {
+      const toggleMax = () => {
+        const isMax = windowEl.classList.toggle('maximized');
+        btnMax.title = isMax ? '向下还原' : '最大化';
+        btnMax.setAttribute('aria-label', isMax ? '向下还原' : '最大化');
+      };
+
       btnMax.addEventListener('click', () => {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().then(() => {
+            windowEl.classList.add('maximized');
+            btnMax.title = '向下还原';
+            btnMax.setAttribute('aria-label', '向下还原');
+          }).catch(() => {
+            // Fallback if browser denies fullscreen API
+            toggleMax();
+          });
         } else {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().then(() => {
+            windowEl.classList.remove('maximized');
+            btnMax.title = '最大化';
+            btnMax.setAttribute('aria-label', '最大化');
+          }).catch(() => {
+            toggleMax();
+          });
         }
+      });
+
+      document.addEventListener('fullscreenchange', () => {
+        const isFullscreen = !!document.fullscreenElement;
+        windowEl.classList.toggle('maximized', isFullscreen);
+        btnMax.title = isFullscreen ? '向下还原' : '最大化';
+        btnMax.setAttribute('aria-label', isFullscreen ? '向下还原' : '最大化');
       });
     }
 

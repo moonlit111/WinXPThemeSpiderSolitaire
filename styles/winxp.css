@@ -53,6 +53,15 @@ body {
   }
 }
 
+.xp-window.maximized {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
 /* Title Bar */
 .xp-titlebar {
   height: 28px;
@@ -85,38 +94,78 @@ body {
 .xp-titlebar-controls {
   display: flex;
   gap: 2px;
+  align-items: center;
 }
 
 .xp-btn-title {
   width: 21px;
   height: 21px;
-  border-radius: 3px;
-  border: 1px solid #ffffff;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 21px;
+  min-height: 21px;
+  border: none;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 21px 21px;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  padding: 0;
+  box-shadow: none;
+  outline: none;
+  border-radius: 3px;
+  font-size: 0;
+  line-height: 0;
 }
 
-.xp-btn-min, .xp-btn-max {
-  background: linear-gradient(180deg, #3d8cf6 0%, #1555c8 100%);
+.xp-btn-title:focus {
+  outline: none;
 }
 
-.xp-btn-min:hover, .xp-btn-max:hover {
-  background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+.xp-btn-min {
+  background-image: url("../assets/ui/titlebar/minimize.svg");
+}
+
+.xp-btn-min:hover {
+  background-image: url("../assets/ui/titlebar/minimize_hover.svg");
+}
+
+.xp-btn-min:active {
+  background-image: url("../assets/ui/titlebar/minimize_active.svg");
+}
+
+.xp-btn-max {
+  background-image: url("../assets/ui/titlebar/maximize.svg");
+}
+
+.xp-btn-max:hover {
+  background-image: url("../assets/ui/titlebar/maximize_hover.svg");
+}
+
+.xp-btn-max:active {
+  background-image: url("../assets/ui/titlebar/maximize_active.svg");
+}
+
+.xp-window.maximized .xp-btn-max {
+  background-image: url("../assets/ui/titlebar/restore.svg");
+}
+
+.xp-window.maximized .xp-btn-max:hover {
+  background-image: url("../assets/ui/titlebar/restore_hover.svg");
+}
+
+.xp-window.maximized .xp-btn-max:active {
+  background-image: url("../assets/ui/titlebar/restore_active.svg");
 }
 
 .xp-btn-close {
-  background: linear-gradient(180deg, #e96b56 0%, #c23321 100%);
-  border-color: #f7a89e;
+  background-image: url("../assets/ui/titlebar/close.svg");
 }
 
 .xp-btn-close:hover {
-  background: linear-gradient(180deg, #f87171 0%, #dc2626 100%);
+  background-image: url("../assets/ui/titlebar/close_hover.svg");
+}
+
+.xp-btn-close:active {
+  background-image: url("../assets/ui/titlebar/close_active.svg");
 }
 
 /* Menu Bar (游戏, 发牌, 帮助) */

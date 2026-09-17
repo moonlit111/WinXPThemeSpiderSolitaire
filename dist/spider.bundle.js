@@ -1282,38 +1282,38 @@ class Dialogs {
    */
   showDifficulty(currentDiff, onSelect) {
     const html = `
-      <div style="font-size: 12px; color: #000000; padding: 2px 0;">
-        <div style="margin-bottom: 10px;">请选择游戏的难易级别:</div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 12px; color: #000000; padding: 4px 2px;">
+        <div style="margin-bottom: 12px;">请选择游戏的难易级别:</div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
           <!-- 初级: 单色 (黑桃 123) -->
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="radio" name="diff_choice" value="1" ${currentDiff === 1 ? 'checked' : ''}>
-            <div style="display: flex; align-items: center; gap: 2px;">
-              <img src="assets/ui/icon_123.png" style="width:16px;height:16px;" alt="黑桃">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none;">
+            <input type="radio" name="diff_choice" value="1" ${currentDiff === 1 ? 'checked' : ''} style="cursor: pointer; margin: 0;">
+            <div style="display: flex; align-items: center; gap: 4px; min-width: 108px;">
+              <img src="assets/ui/icon_123.png" style="width:24px;height:24px;image-rendering:pixelated;" alt="黑桃">
             </div>
-            <span>初级(&E): 单色</span>
+            <span style="font-size: 12px;">初级(&E): 单色</span>
           </label>
 
           <!-- 中级: 双色 (黑桃 123, 红桃 122) -->
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="radio" name="diff_choice" value="2" ${currentDiff === 2 ? 'checked' : ''}>
-            <div style="display: flex; align-items: center; gap: 2px;">
-              <img src="assets/ui/icon_123.png" style="width:16px;height:16px;" alt="黑桃">
-              <img src="assets/ui/icon_122.png" style="width:16px;height:16px;" alt="红桃">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none;">
+            <input type="radio" name="diff_choice" value="2" ${currentDiff === 2 ? 'checked' : ''} style="cursor: pointer; margin: 0;">
+            <div style="display: flex; align-items: center; gap: 4px; min-width: 108px;">
+              <img src="assets/ui/icon_123.png" style="width:24px;height:24px;image-rendering:pixelated;" alt="黑桃">
+              <img src="assets/ui/icon_122.png" style="width:24px;height:24px;image-rendering:pixelated;" alt="红桃">
             </div>
-            <span>中级(&M): 双色</span>
+            <span style="font-size: 12px;">中级(&M): 双色</span>
           </label>
 
           <!-- 高级: 四色 (黑桃 123, 红桃 122, 梅花 120, 方块 121) -->
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="radio" name="diff_choice" value="4" ${currentDiff === 4 ? 'checked' : ''}>
-            <div style="display: flex; align-items: center; gap: 2px;">
-              <img src="assets/ui/icon_123.png" style="width:16px;height:16px;" alt="黑桃">
-              <img src="assets/ui/icon_122.png" style="width:16px;height:16px;" alt="红桃">
-              <img src="assets/ui/icon_120.png" style="width:16px;height:16px;" alt="梅花">
-              <img src="assets/ui/icon_121.png" style="width:16px;height:16px;" alt="方块">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none;">
+            <input type="radio" name="diff_choice" value="4" ${currentDiff === 4 ? 'checked' : ''} style="cursor: pointer; margin: 0;">
+            <div style="display: flex; align-items: center; gap: 4px; min-width: 108px;">
+              <img src="assets/ui/icon_123.png" style="width:24px;height:24px;image-rendering:pixelated;" alt="黑桃">
+              <img src="assets/ui/icon_122.png" style="width:24px;height:24px;image-rendering:pixelated;" alt="红桃">
+              <img src="assets/ui/icon_120.png" style="width:24px;height:24px;image-rendering:pixelated;" alt="梅花">
+              <img src="assets/ui/icon_121.png" style="width:24px;height:24px;image-rendering:pixelated;" alt="方块">
             </div>
-            <span>高级(&D): 四色</span>
+            <span style="font-size: 12px;">高级(&D): 四色</span>
           </label>
         </div>
       </div>
@@ -1321,7 +1321,7 @@ class Dialogs {
 
     this.show({
       title: '难易级别',
-      width: 320,
+      width: 330,
       contentHtml: html,
       buttons: [
         {
@@ -2306,12 +2306,38 @@ class App {
     }
 
     if (btnMax) {
+      const toggleMax = () => {
+        const isMax = windowEl.classList.toggle('maximized');
+        btnMax.title = isMax ? '向下还原' : '最大化';
+        btnMax.setAttribute('aria-label', isMax ? '向下还原' : '最大化');
+      };
+
       btnMax.addEventListener('click', () => {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().then(() => {
+            windowEl.classList.add('maximized');
+            btnMax.title = '向下还原';
+            btnMax.setAttribute('aria-label', '向下还原');
+          }).catch(() => {
+            // Fallback if browser denies fullscreen API
+            toggleMax();
+          });
         } else {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().then(() => {
+            windowEl.classList.remove('maximized');
+            btnMax.title = '最大化';
+            btnMax.setAttribute('aria-label', '最大化');
+          }).catch(() => {
+            toggleMax();
+          });
         }
+      });
+
+      document.addEventListener('fullscreenchange', () => {
+        const isFullscreen = !!document.fullscreenElement;
+        windowEl.classList.toggle('maximized', isFullscreen);
+        btnMax.title = isFullscreen ? '向下还原' : '最大化';
+        btnMax.setAttribute('aria-label', isFullscreen ? '向下还原' : '最大化');
       });
     }
 
