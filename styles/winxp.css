@@ -177,6 +177,17 @@ body {
   color: #ffffff;
 }
 
+.xp-dropdown-row.disabled {
+  color: #808080 !important;
+  cursor: default;
+  pointer-events: none;
+}
+
+.xp-dropdown-row.disabled:hover {
+  background-color: transparent !important;
+  color: #808080 !important;
+}
+
 .xp-dropdown-shortcut {
   font-size: 11px;
   color: #666;
@@ -185,6 +196,15 @@ body {
 
 .xp-dropdown-row:hover .xp-dropdown-shortcut {
   color: #ffffff;
+}
+
+.xp-dropdown-row.disabled .xp-dropdown-shortcut {
+  color: #a0a0a0 !important;
+}
+
+.xp-menu-item.disabled {
+  color: #808080 !important;
+  pointer-events: none !important;
 }
 
 .xp-dropdown-separator {

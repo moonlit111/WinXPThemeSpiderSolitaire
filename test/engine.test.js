@@ -227,5 +227,36 @@ console.log('Running 1:1 Reverse-Engineered Spider Solitaire Automated Tests...'
   assert.strictEqual(gDebug.completedSuits.length, 8);
 }
 
+// 10. Undo History Reset on Deal and Run Completion (FUN_01003259)
+{
+  const g = new SpiderGame(DIFFICULTY.ONE_SUIT);
+  // Setup valid move
+  g.columns[0] = [new Card(SUITS.SPADES, 5, true)];
+  g.columns[1] = [new Card(SUITS.SPADES, 6, true)];
+  g.moveCards(0, 0, 1);
+  assert.strictEqual(g.canUndo(), true, 'Move adds snapshot to undoStack');
+
+  // Dealing a round must clear undo history (FUN_010069b2 line 3703 -> FUN_01003259)
+  for (let c = 0; c < 10; c++) {
+    if (g.columns[c].length === 0) g.columns[c].push(new Card(SUITS.SPADES, 10, true));
+  }
+  g.dealRound();
+  assert.strictEqual(g.canUndo(), false, 'dealRound must reset undoStack (FUN_01003259)');
+
+  // Move again
+  g.columns[0] = [new Card(SUITS.SPADES, 2, true)];
+  g.columns[1] = [new Card(SUITS.SPADES, 3, true)];
+  g.moveCards(0, 0, 1);
+  assert.strictEqual(g.canUndo(), true, 'Move after deal adds snapshot');
+
+  // Complete a run: must clear undo history (FUN_010064d5 line 3438 -> FUN_01003259)
+  g.columns[2] = [];
+  for (let r = 13; r >= 1; r--) {
+    g.columns[2].push(new Card(SUITS.SPADES, r, true));
+  }
+  g.checkAndCollectRun(2);
+  assert.strictEqual(g.canUndo(), false, 'Collecting a full suit must reset undoStack (FUN_01003259)');
+}
+
 console.log('ALL REVERSE-ENGINEERED TESTS VERIFIED 100%! 🎉');
 

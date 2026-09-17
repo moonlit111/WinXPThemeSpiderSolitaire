@@ -29,8 +29,8 @@
     <!-- Classic Menu Bar (RT_MENU 101: 游戏, 发牌, 帮助) -->
     <div class="xp-menubar">
       <!-- 游戏(&G) -->
-      <div class="xp-menu-item">
-        <span><u>游</u>戏(G)</span>
+      <div class="xp-menu-item" id="menu-game">
+        <span>游戏(<u>G</u>)</span>
         <div class="xp-menu-dropdown">
           <div class="xp-dropdown-row" data-action="new-game">
             <span>开局(<u>N</u>)</span>
@@ -83,12 +83,12 @@
 
       <!-- 发牌(&D) - Direct menu bar trigger from RT_MENU 101 -->
       <div class="xp-menu-item" id="menu-deal-direct" data-action="deal" style="cursor: pointer;">
-        <span><u>发</u>牌(D)</span>
+        <span>发牌(<u>D</u>)</span>
       </div>
 
       <!-- 帮助(&H) -->
-      <div class="xp-menu-item">
-        <span><u>帮</u>助(H)</span>
+      <div class="xp-menu-item" id="menu-help">
+        <span>帮助(<u>H</u>)</span>
         <div class="xp-menu-dropdown">
           <div class="xp-dropdown-row" data-action="rules">
             <span>目录(<u>C</u>)</span>
@@ -114,11 +114,11 @@
         <!-- 1:1 Windows XP Green Scoreboard (FUN_01004a10 / FUN_01003811) -->
         <div class="xp-scoreboard" id="board-scoreboard" data-action="hint" title="显示可行的操作 (M)">
           <div class="xp-scoreboard-row xp-scoreboard-row-score">
-            <span class="xp-scoreboard-label">分数:</span>
+            <span class="xp-scoreboard-label">得分:</span>
             <span class="xp-scoreboard-val" id="status-score">500</span>
           </div>
           <div class="xp-scoreboard-row xp-scoreboard-row-moves">
-            <span class="xp-scoreboard-label">操作:</span>
+            <span class="xp-scoreboard-label">移牌次数:</span>
             <span class="xp-scoreboard-val" id="status-moves">0</span>
           </div>
         </div>

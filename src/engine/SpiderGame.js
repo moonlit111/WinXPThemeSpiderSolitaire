@@ -313,6 +313,7 @@ export class SpiderGame {
     this.completedSuits.push(targetSuit);
     this.score += 100; // FUN_01003596(this, 100)
     this.hintNeedsUpdate = true;
+    this.undoStack = []; // FUN_01003259: Suit collection clears undo history (disables Undo menu)
 
     let autoFlipped = false;
     if (col.length > 0 && !col[col.length - 1].faceUp) {
@@ -352,7 +353,9 @@ export class SpiderGame {
       return { success: false, reason: check.reason };
     }
 
-    this.saveSnapshot();
+    // FUN_01003259 / FUN_010069b2 line 3703:
+    // Dealing a new row clears all undo history and disables Undo!
+    this.undoStack = [];
 
     const dealtCards = [];
     for (let c = 0; c < 10; c++) {

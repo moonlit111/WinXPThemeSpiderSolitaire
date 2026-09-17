@@ -388,6 +388,7 @@ class SpiderGame {
     this.completedSuits.push(targetSuit);
     this.score += 100; // FUN_01003596(this, 100)
     this.hintNeedsUpdate = true;
+    this.undoStack = []; // FUN_01003259: Suit collection clears undo history (disables Undo menu)
 
     let autoFlipped = false;
     if (col.length > 0 && !col[col.length - 1].faceUp) {
@@ -427,7 +428,9 @@ class SpiderGame {
       return { success: false, reason: check.reason };
     }
 
-    this.saveSnapshot();
+    // FUN_01003259 / FUN_010069b2 line 3703:
+    // Dealing a new row clears all undo history and disables Undo!
+    this.undoStack = [];
 
     const dealtCards = [];
     for (let c = 0; c < 10; c++) {
@@ -928,8 +931,8 @@ class Renderer {
         else downCount++;
       }
 
-      // Windows XP FUN_01005ca9: face-down cards step is 9px (7-9px visible strip)
-      let downStep = 9;
+      // Windows XP FUN_01002ab2 line 217: face-down cards step is strictly 7px (param_2 * 7 + 10)
+      let downStep = 7;
       let upStep = 22;
 
       // Auto-compress spacing if column overflows
@@ -971,10 +974,8 @@ class Renderer {
     this.stockEl.innerHTML = '';
     const dealsLeft = this.game.stockDealsLeft;
 
+    // FUN_0100385f line 1284: When 0 deals left, nothing is drawn (pure green felt)
     if (dealsLeft <= 0) {
-      const emptyHint = document.createElement('div');
-      emptyHint.className = 'stock-empty-hint';
-      this.stockEl.appendChild(emptyHint);
       return;
     }
 
@@ -2045,15 +2046,18 @@ class App {
 
     // Hook game events
     this.game.onChange((event, data) => {
+      this.updateMenuStates();
       if (event === 'undo') {
         this.renderer.render();
       } else if (event === 'move' || event === 'deal') {
-        if (data.isWin) {
+        if (data && data.isWin) {
           this.recordGameResult(true, this.game.score);
           localStorage.removeItem('spider_saved_game');
         }
       }
     });
+
+    this.updateMenuStates();
   }
 
   loadOptions() {
@@ -2240,9 +2244,48 @@ class App {
       } finally {
         if (this.interaction) this.interaction.isBusy = false;
       }
-    } else {
       this.renderer.render();
       this.audio.play('deal');
+    }
+    this.updateMenuStates();
+  }
+
+  /**
+   * 1:1 Windows XP Menu item enabled/grayed states (EnableMenuItem / FUN_01003259 / FUN_010069b2)
+   */
+  updateMenuStates() {
+    // 0x9c4a (Undo): Disabled when no moves in undo stack
+    const undoRow = document.querySelector('.xp-dropdown-row[data-action="undo"]');
+    if (undoRow) {
+      if (this.game.canUndo()) {
+        undoRow.classList.remove('disabled');
+      } else {
+        undoRow.classList.add('disabled');
+      }
+    }
+
+    // 0x9c47 / 0x9c50 (Deal): Disabled when stock deals are exhausted
+    const dealRow = document.querySelector('.xp-dropdown-row[data-action="deal"]');
+    const dealDirect = document.getElementById('menu-deal-direct');
+    if (this.game.stockDealsLeft > 0) {
+      if (dealRow) dealRow.classList.remove('disabled');
+      if (dealDirect) dealDirect.classList.remove('disabled');
+      if (this.renderer && this.renderer.stockEl) this.renderer.stockEl.classList.remove('empty');
+    } else {
+      if (dealRow) dealRow.classList.add('disabled');
+      if (dealDirect) dealDirect.classList.add('disabled');
+      if (this.renderer && this.renderer.stockEl) this.renderer.stockEl.classList.add('empty');
+    }
+
+    // 0x9c4d (Hint) & 0x9c4b (Save): Disabled after victory
+    const hintRow = document.querySelector('.xp-dropdown-row[data-action="hint"]');
+    const saveRow = document.querySelector('.xp-dropdown-row[data-action="save-game"]');
+    if (this.game.isWon) {
+      if (hintRow) hintRow.classList.add('disabled');
+      if (saveRow) saveRow.classList.add('disabled');
+    } else {
+      if (hintRow) hintRow.classList.remove('disabled');
+      if (saveRow) saveRow.classList.remove('disabled');
     }
   }
 
@@ -2251,6 +2294,10 @@ class App {
     const btnMax = document.getElementById('btn-max');
     const btnMin = document.getElementById('btn-min');
     const windowEl = document.querySelector('.xp-window');
+
+    if (windowEl) {
+      windowEl.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
 
     if (btnMin) {
       btnMin.addEventListener('click', () => {
@@ -2420,6 +2467,7 @@ class App {
     document.querySelectorAll('[data-action]').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (el.classList.contains('disabled')) return;
         menuItems.forEach(m => m.classList.remove('active'));
         const action = el.dataset.action;
         if (actionMap[action]) actionMap[action]();
@@ -2429,6 +2477,61 @@ class App {
 
   bindShortcuts() {
     window.addEventListener('keydown', async (e) => {
+      // Alt shortcuts (Windows XP standard accelerators LoadAcceleratorsW 0x66)
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const key = e.key.toLowerCase();
+        if (key === 'g') {
+          e.preventDefault();
+          const gameMenu = document.getElementById('menu-game');
+          if (gameMenu) gameMenu.click();
+          return;
+        }
+        if (key === 'd') {
+          e.preventDefault();
+          if (this.game.stockDealsLeft > 0) {
+            this.interaction.handleStockClick();
+          }
+          return;
+        }
+        if (key === 'h') {
+          e.preventDefault();
+          const helpMenu = document.getElementById('menu-help');
+          if (helpMenu) helpMenu.click();
+          return;
+        }
+      }
+
+      // If a dropdown menu is open, single letter accelerator triggers action
+      const activeMenu = document.querySelector('.xp-menu-item.active');
+      if (activeMenu && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const key = e.key.toLowerCase();
+        const letterMap = {
+          'n': 'new-game',
+          'r': 'restart',
+          'u': 'undo',
+          'd': 'deal',
+          'm': 'hint',
+          'i': 'difficulty',
+          't': 'stats',
+          'p': 'options',
+          's': 'save-game',
+          'o': 'load-game',
+          'x': 'exit',
+          'c': 'rules',
+          'a': 'about'
+        };
+        const actionName = letterMap[key];
+        if (actionName) {
+          const row = activeMenu.querySelector(`[data-action="${actionName}"]`);
+          if (row && !row.classList.contains('disabled')) {
+            e.preventDefault();
+            activeMenu.classList.remove('active');
+            row.click();
+            return;
+          }
+        }
+      }
+
       // F1: Rules / Help Topics
       if (e.key === 'F1') {
         e.preventDefault();
@@ -2459,8 +2562,8 @@ class App {
         const action = document.querySelector('[data-action="options"]');
         if (action) action.click();
       }
-      // Ctrl+Z / Cmd+Z: Undo
-      else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      // Ctrl+Z / Cmd+Z / Alt+Backspace: Undo (FUN_01004ef8)
+      else if (((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) || (e.altKey && e.key === 'Backspace')) {
         e.preventDefault();
         if (this.game.canUndo()) {
           this.interaction.clearSelection();
@@ -2472,7 +2575,7 @@ class App {
       else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         const action = document.querySelector('[data-action="save-game"]');
-        if (action) action.click();
+        if (action && !action.classList.contains('disabled')) action.click();
       }
       // Ctrl+O / Cmd+O: Load Game
       else if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) {
@@ -2483,12 +2586,16 @@ class App {
       // H / M: Hint
       else if (e.key === 'h' || e.key === 'H' || e.key === 'm' || e.key === 'M') {
         e.preventDefault();
-        this.interaction.triggerHint();
+        if (!this.game.isWon) {
+          this.interaction.triggerHint();
+        }
       }
       // D: Deal
       else if (e.key === 'd' || e.key === 'D') {
         e.preventDefault();
-        this.interaction.handleStockClick();
+        if (this.game.stockDealsLeft > 0) {
+          this.interaction.handleStockClick();
+        }
       }
       // Escape: Boss Key (FUN_01006db6) or close dialog
       else if (e.key === 'Escape') {

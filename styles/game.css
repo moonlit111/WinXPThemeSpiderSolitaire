@@ -197,13 +197,17 @@
   white-space: nowrap;
 }
 
-/* Stock Pile (Right): 5 deals of 10 cards */
+/* Stock Pile (Right): 5 deals of 10 cards (FUN_01002af5 / FUN_0100385f) */
 .stock-area {
   display: flex;
   position: relative;
-  width: calc(var(--card-width) + 36px);
+  width: calc(var(--card-width) + 48px); /* 71px + 48px = 119px */
   height: var(--card-height);
   cursor: pointer;
+}
+
+.stock-area.empty {
+  cursor: default;
 }
 
 .stock-card {
@@ -228,12 +232,7 @@
 }
 
 .stock-empty-hint {
-  width: var(--card-width);
-  height: var(--card-height);
-  border: 1px dashed rgba(255, 255, 255, 0.4);
-  border-radius: var(--card-radius);
-  position: absolute;
-  pointer-events: none;
+  display: none;
 }
 
 /* Dragging Floating Layer */

@@ -63,8 +63,8 @@ export class Renderer {
         else downCount++;
       }
 
-      // Windows XP FUN_01005ca9: face-down cards step is 9px (7-9px visible strip)
-      let downStep = 9;
+      // Windows XP FUN_01002ab2 line 217: face-down cards step is strictly 7px (param_2 * 7 + 10)
+      let downStep = 7;
       let upStep = 22;
 
       // Auto-compress spacing if column overflows
@@ -106,10 +106,8 @@ export class Renderer {
     this.stockEl.innerHTML = '';
     const dealsLeft = this.game.stockDealsLeft;
 
+    // FUN_0100385f line 1284: When 0 deals left, nothing is drawn (pure green felt)
     if (dealsLeft <= 0) {
-      const emptyHint = document.createElement('div');
-      emptyHint.className = 'stock-empty-hint';
-      this.stockEl.appendChild(emptyHint);
       return;
     }
 
