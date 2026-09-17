@@ -153,11 +153,17 @@ export class Interaction {
    * No alert dialog is shown on no hint (matches authentic Windows XP behavior).
    */
   async triggerHint() {
+    if (this.isBusy) return;
     this.clearSelection();
     const hint = this.game.getNextHint();
     if (hint) {
-      this.audio.play('hint'); // 126.wav
-      await this.renderer.playHintAnimation(hint);
+      this.isBusy = true;
+      try {
+        this.audio.play('hint'); // 126.wav
+        await this.renderer.playHintAnimation(hint);
+      } finally {
+        this.isBusy = false;
+      }
     } else {
       this.audio.play('noHint'); // 127.wav
     }

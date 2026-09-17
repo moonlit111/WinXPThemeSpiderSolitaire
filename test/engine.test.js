@@ -85,7 +85,8 @@ console.log('Running 1:1 Reverse-Engineered Spider Solitaire Automated Tests...'
 // 5. Exact 3-Level Hint Priority & Queue Cycling (FUN_01003a90, FUN_0100315b, FUN_010031ab)
 {
   const g = new SpiderGame(DIFFICULTY.TWO_SUITS);
-  g.columns = Array.from({ length: 10 }, () => []);
+  // Fill all 10 columns with Ace (rank 1) so columns 4..9 do not accept Spades 5
+  g.columns = Array.from({ length: 10 }, () => [new Card(SUITS.SPADES, 1, true)]);
   
   // Source: Spades 5 on top of a face-down card
   g.columns[0] = [new Card(SUITS.SPADES, 10, false), new Card(SUITS.SPADES, 5, true)];
@@ -108,10 +109,46 @@ console.log('Running 1:1 Reverse-Engineered Spider Solitaire Automated Tests...'
   assert.strictEqual(hint3.priority, 1, 'Third priority hint must be Priority 1 (empty slot)');
   assert.strictEqual(hint3.toCol, 3);
 
-  // Cycling test
+  // Cycling test: advance through remaining hints until it cycles back to start
+  for (let i = 3; i < g.hintQueue.length; i++) {
+    const h = g.getNextHint();
+    assert.strictEqual(h.priority, 1);
+  }
   const hintCycle = g.getNextHint();
   assert.strictEqual(hintCycle.priority, 3, 'Hint queue must cycle back to first hint');
+  assert.strictEqual(hintCycle.toCol, 1);
 }
+
+// 5.1 Run Preservation in Hint Generation (FUN_01003a90 lines 1463-1481)
+{
+  const g = new SpiderGame(DIFFICULTY.TWO_SUITS);
+  // Fill all 10 columns with Ace so none are empty
+  g.columns = Array.from({ length: 10 }, () => [new Card(SUITS.SPADES, 1, true)]);
+  
+  // Column 0: Spades 8, Spades 7, Spades 6 (assembled homogeneous run)
+  g.columns[0] = [
+    new Card(SUITS.SPADES, 8, true),
+    new Card(SUITS.SPADES, 7, true),
+    new Card(SUITS.SPADES, 6, true)
+  ];
+  // Column 1: Spades 7 (would only accept Spades 6 if torn apart)
+  g.columns[1] = [new Card(SUITS.SPADES, 7, true)];
+  // Column 2: Spades 9 (accepts the full run starting at Spades 8)
+  g.columns[2] = [new Card(SUITS.SPADES, 9, true)];
+
+  g.hintNeedsUpdate = true;
+  const hint = g.getNextHint();
+  assert.strictEqual(hint.fromCol, 0);
+  assert.strictEqual(hint.cardIndex, 0); // Must be Spades 8 (the whole run)
+  assert.strictEqual(hint.toCol, 2); // Onto Spades 9
+  assert.strictEqual(hint.priority, 3);
+
+  // Next hint should not be moving Spades 6 to Col 1
+  const hintNext = g.getNextHint();
+  assert.strictEqual(hintNext.priority, 3); // cycles back
+  assert.strictEqual(hintNext.cardIndex, 0);
+}
+
 
 // 6. Score & Moves on Move, Deal, Undo (FUN_01004c2d, FUN_01003596, FUN_01004ef8)
 {

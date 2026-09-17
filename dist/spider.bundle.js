@@ -489,62 +489,90 @@ class SpiderGame {
   }
 
   /**
-   * FUN_01003a90, FUN_0100315b, FUN_010031ab, FUN_0100313c:
-   * Exact reverse-engineered 3-level Hint calculation & cycling queue.
-   * Priority:
-   * - 3: Same-suit move onto another card
-   * - 2: Different-suit move onto another card
-   * - 1: Move onto empty column
+   * FUN_01003a90, FUN_0100315b, FUN_010031ab, FUN_010030ca:
+   * 100% exact reverse-engineered Windows XP hint generation & priority sorting.
+   *
+   * Logic from decompiled_spider.c FUN_01003a90:
+   * 1. Iterate fromCol = 0..9, toCol = 0..9 (fromCol !== toCol).
+   * 2. For fromCol, find the top of the maximal homogeneous same-suit descending run
+   *    at the bottom of fromCol (lines 1463-1481):
+   *    Starting at bottom card iVar4 = col.length - 1, walk backwards while:
+   *      - same suit
+   *      - descending rank by 1 (cur.rank === prev.rank - 1)
+   *      - face-up
+   * 3. Check if moving fromCards[iVar4..] to toCol is legal (FUN_01003a06):
+   *    - Empty toCol accepts the run (Priority 1)
+   *    - Non-empty toCol: targetTop.faceUp && targetTop.rank === fromCards[iVar4].rank + 1
+   * 4. Priority (FUN_0100315b):
+   *    - Same suit landing: 3
+   *    - Different suit landing: 2
+   *    - Empty column landing: 1
+   * 5. Stable sort descending by priority (FUN_010031ab), preserving fromCol 0..9, toCol 0..9 generation order.
+   * 6. Max 31 hints in queue (FUN_010030ca).
    */
   updateHintQueue() {
     this.hintQueue = [];
     this.hintIndex = 0;
 
     for (let fromCol = 0; fromCol < 10; fromCol++) {
-      const col = this.columns[fromCol];
-      if (col.length === 0) continue;
+      const fromCards = this.columns[fromCol];
+      if (fromCards.length === 0) continue;
 
-      // Find movable sequence start in this column
-      for (let idx = col.length - 1; idx >= 0; idx--) {
-        if (!col[idx].faceUp) break;
-        if (!this.isSequenceMovable(fromCol, idx)) break;
+      for (let toCol = 0; toCol < 10; toCol++) {
+        if (fromCol === toCol) continue;
 
-        const movingCard = col[idx];
-        const isFullFaceUpRun = (idx === 0 || !col[idx - 1].faceUp);
+        // FUN_01003a90 lines 1463-1481:
+        let cardIdx = fromCards.length - 1;
+        if (cardIdx > 0) {
+          let prevIdx = cardIdx - 1;
+          do {
+            const cur = fromCards[cardIdx];
+            const prev = fromCards[prevIdx];
+            if (cur.suit !== prev.suit) break;
+            if (cur.rank !== prev.rank - 1) break;
+            if (!prev.faceUp) break;
+            cardIdx--;
+            prevIdx--;
+          } while (cardIdx > 0);
+        }
 
-        for (let toCol = 0; toCol < 10; toCol++) {
-          if (fromCol === toCol) continue;
-          if (this.canMove(fromCol, idx, toCol)) {
-            const targetCol = this.columns[toCol];
-            let priority;
+        // FUN_01003a06: check legality
+        if (!fromCards[cardIdx].faceUp) continue;
 
-            if (targetCol.length === 0) {
-              // Only suggest the first empty column to avoid redundant hints
-              const firstEmpty = this.columns.findIndex(c => c.length === 0);
-              if (firstEmpty !== -1 && toCol !== firstEmpty) continue;
-              // If moving an entire face-up column onto an empty column with nothing revealed, skip
-              if (isFullFaceUpRun && idx === 0) continue;
-              priority = 1;
-            } else {
-              const targetTop = targetCol[targetCol.length - 1];
-              // Priority 3: same suit; Priority 2: diff suit
-              priority = (targetTop.suit === movingCard.suit) ? 3 : 2;
-            }
+        const toCards = this.columns[toCol];
+        let isLegal = false;
+        let priority = 0;
+        let targetCardIndex = -1;
 
+        if (toCards.length === 0) {
+          isLegal = true;
+          priority = 1; // FUN_0100315b: empty column = 1
+        } else {
+          targetCardIndex = toCards.length - 1;
+          const targetTop = toCards[targetCardIndex];
+          if (targetTop.faceUp && targetTop.rank === fromCards[cardIdx].rank + 1) {
+            isLegal = true;
+            priority = (targetTop.suit === fromCards[cardIdx].suit) ? 3 : 2; // FUN_0100315b
+          }
+        }
+
+        if (isLegal && priority > 0) {
+          if (this.hintQueue.length < 31) { // FUN_010030ca: max 31
             this.hintQueue.push({
               fromCol,
-              cardIndex: idx,
+              cardIndex: cardIdx,
               toCol,
-              targetCardIndex: targetCol.length > 0 ? targetCol.length - 1 : 0,
+              targetCardIndex,
               priority,
-              card: movingCard
+              card: fromCards[cardIdx]
             });
           }
         }
       }
     }
 
-    // Sort descending by priority (insertion sort from FUN_010031ab)
+    // FUN_010031ab: Stable insertion sort in descending order of priority (3 > 2 > 1)
+    // Preserves exact fromCol 0..9 and toCol 0..9 generation order for equal priorities
     this.hintQueue.sort((a, b) => b.priority - a.priority);
     this.hintNeedsUpdate = false;
   }
@@ -1664,11 +1692,17 @@ class Interaction {
    * No alert dialog is shown on no hint (matches authentic Windows XP behavior).
    */
   async triggerHint() {
+    if (this.isBusy) return;
     this.clearSelection();
     const hint = this.game.getNextHint();
     if (hint) {
-      this.audio.play('hint'); // 126.wav
-      await this.renderer.playHintAnimation(hint);
+      this.isBusy = true;
+      try {
+        this.audio.play('hint'); // 126.wav
+        await this.renderer.playHintAnimation(hint);
+      } finally {
+        this.isBusy = false;
+      }
     } else {
       this.audio.play('noHint'); // 127.wav
     }
