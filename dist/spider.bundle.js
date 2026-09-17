@@ -1088,7 +1088,96 @@ class Renderer {
     await new Promise(r => setTimeout(r, 330));
     flyer.remove();
   }
+
+  /**
+   * 1:1 Windows XP Sequential Deal Animation (FUN_010069b2 / FUN_01005115 / FUN_010047bd)
+   * Sequentially glides cards from the stock pile (bottom-right) to target columns one by one,
+   * accompanied by 124.wav sound per card over ~110ms flight time.
+   *
+   * @param {Array<{col: number, card: import('../engine/Card.js').Card, cardIdx: number, faceUp: boolean}>} dealtList
+   * @param {import('../engine/AudioService.js').AudioService} [audioService]
+   */
+  async animateDealCards(dealtList, audioService = null) {
+    if (!dealtList || dealtList.length === 0) return;
+
+    const dragLayer = document.getElementById('drag-layer') || document.body;
+    const stockRect = this.stockEl.getBoundingClientRect();
+    const packetIdx = Math.max(0, this.game.stockDealsLeft);
+    const startX = stockRect.left + packetIdx * 12;
+    const startY = stockRect.top;
+
+    // Collect and temporarily hide all destination cards so they appear strictly one-by-one
+    const hiddenEls = [];
+    for (const item of dealtList) {
+      const colEl = this.columnEls[item.col];
+      if (colEl) {
+        const cardEl = colEl.querySelector(`[data-card-idx="${item.cardIdx}"]`);
+        if (cardEl) {
+          cardEl.style.visibility = 'hidden';
+          hiddenEls.push(cardEl);
+        }
+      }
+    }
+
+    try {
+      for (let i = 0; i < dealtList.length; i++) {
+        const item = dealtList[i];
+        const colEl = this.columnEls[item.col];
+        if (!colEl) continue;
+
+        const targetCardEl = colEl.querySelector(`[data-card-idx="${item.cardIdx}"]`);
+        let targetX, targetY;
+
+        if (targetCardEl) {
+          const targetRect = targetCardEl.getBoundingClientRect();
+          targetX = targetRect.left;
+          targetY = targetRect.top;
+        } else {
+          const colRect = colEl.getBoundingClientRect();
+          targetX = colRect.left;
+          targetY = colRect.top;
+        }
+
+        const flyer = document.createElement('div');
+        flyer.className = 'deal-flyer';
+        flyer.style.left = `${startX}px`;
+        flyer.style.top = `${startY}px`;
+        flyer.style.transition = 'all 110ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+        const img = document.createElement('img');
+        img.src = item.faceUp ? item.card.faceImage : item.card.backImage;
+        flyer.appendChild(img);
+
+        dragLayer.appendChild(flyer);
+        void flyer.offsetWidth; // Reflow to trigger CSS transition
+
+        flyer.style.left = `${targetX}px`;
+        flyer.style.top = `${targetY}px`;
+
+        // Wait for flight (110ms)
+        await new Promise(r => setTimeout(r, 110));
+
+        flyer.remove();
+        if (targetCardEl) {
+          targetCardEl.style.visibility = 'visible';
+        }
+        if (audioService) {
+          audioService.play('deal'); // 124.wav
+        }
+
+        // Brief 15ms interval between deals for authentic rhythm
+        await new Promise(r => setTimeout(r, 15));
+      }
+    } finally {
+      // Clean up flyers and restore visibility guarantee
+      hiddenEls.forEach(el => {
+        el.style.visibility = 'visible';
+      });
+      dragLayer.querySelectorAll('.deal-flyer').forEach(el => el.remove());
+    }
+  }
 }
+
 
   // --- src/ui/Dialogs.js ---
 /**
@@ -1433,12 +1522,14 @@ class Dialogs {
  */
 
 class Interaction {
-  constructor(game, renderer, audioService, dialogs, victoryAnim) {
+  constructor(game, renderer, audioService, dialogs, victoryAnim, getOptions = null) {
     this.game = game;
     this.renderer = renderer;
     this.audio = audioService;
     this.dialogs = dialogs;
     this.victoryAnim = victoryAnim;
+    this.getOptions = getOptions;
+    this.isBusy = false;
 
     this.dragLayer = document.getElementById('drag-layer');
     this.bottomHintBtn = document.getElementById('board-scoreboard') || document.getElementById('bottom-hint-btn');
@@ -1516,6 +1607,8 @@ class Interaction {
   }
 
   async handleStockClick() {
+    if (this.isBusy) return;
+
     const check = this.game.canDeal();
     if (!check.canDeal) {
       if (check.reason === 'EMPTY_COLUMN') {
@@ -1526,24 +1619,42 @@ class Interaction {
     }
 
     this.clearSelection();
-    const result = this.game.dealRound();
-    if (result.success) {
-      this.audio.play('deal'); // 124.wav
-      this.renderer.render();
+    this.isBusy = true;
 
-      if (result.completedRuns && result.completedRuns.length > 0) {
-        for (let i = 0; i < result.completedRuns.length; i++) {
-          const run = result.completedRuns[i];
-          const slotIdx = this.game.completedSuits.length - result.completedRuns.length + i;
+    try {
+      const animDeal = !this.getOptions || this.getOptions().animDeal !== false;
+      const result = this.game.dealRound();
+      if (result.success) {
+        this.renderer.render();
+
+        if (animDeal) {
+          const dealtList = result.dealtCards.map(d => ({
+            col: d.col,
+            card: d.card,
+            cardIdx: this.game.columns[d.col].length - 1,
+            faceUp: true
+          }));
+          await this.renderer.animateDealCards(dealtList, this.audio);
+        } else {
           this.audio.play('deal'); // 124.wav
-          await this.renderer.animateCollectRun(run, slotIdx);
-          this.renderer.render();
+        }
+
+        if (result.completedRuns && result.completedRuns.length > 0) {
+          for (let i = 0; i < result.completedRuns.length; i++) {
+            const run = result.completedRuns[i];
+            const slotIdx = this.game.completedSuits.length - result.completedRuns.length + i;
+            this.audio.play('deal'); // 124.wav
+            await this.renderer.animateCollectRun(run, slotIdx);
+            this.renderer.render();
+          }
+        }
+
+        if (result.isWin) {
+          this.handleWin();
         }
       }
-
-      if (result.isWin) {
-        this.handleWin();
-      }
+    } finally {
+      this.isBusy = false;
     }
   }
 
@@ -1564,6 +1675,7 @@ class Interaction {
   }
 
   onPointerDown(e) {
+    if (this.isBusy) return;
     const cardEl = e.target.closest('.card-element');
 
     // Right-click peek (FUN_01003712)
@@ -1771,25 +1883,32 @@ class Interaction {
   }
 
   async executeMove(fromCol, cardIdx, toCol) {
+    if (this.isBusy) return;
     this.clearSelection();
-    const res = this.game.moveCards(fromCol, cardIdx, toCol);
-    if (res.success) {
-      this.audio.play('drop'); // 125.wav
-      this.renderer.render();
+    this.isBusy = true;
 
-      if (res.completedRuns && res.completedRuns.length > 0) {
-        for (let i = 0; i < res.completedRuns.length; i++) {
-          const run = res.completedRuns[i];
-          const slotIdx = this.game.completedSuits.length - res.completedRuns.length + i;
-          this.audio.play('deal'); // 124.wav
-          await this.renderer.animateCollectRun(run, slotIdx);
-          this.renderer.render();
+    try {
+      const res = this.game.moveCards(fromCol, cardIdx, toCol);
+      if (res.success) {
+        this.audio.play('drop'); // 125.wav
+        this.renderer.render();
+
+        if (res.completedRuns && res.completedRuns.length > 0) {
+          for (let i = 0; i < res.completedRuns.length; i++) {
+            const run = res.completedRuns[i];
+            const slotIdx = this.game.completedSuits.length - res.completedRuns.length + i;
+            this.audio.play('deal'); // 124.wav
+            await this.renderer.animateCollectRun(run, slotIdx);
+            this.renderer.render();
+          }
+        }
+
+        if (res.isWin) {
+          this.handleWin();
         }
       }
-
-      if (res.isWin) {
-        this.handleWin();
-      }
+    } finally {
+      this.isBusy = false;
     }
   }
 
@@ -1797,6 +1916,7 @@ class Interaction {
    * Double-click on card: instantly smart-move to best column
    */
   onDoubleClick(e) {
+    if (this.isBusy) return;
     const cardEl = e.target.closest('.card-element');
     if (!cardEl) return;
 
@@ -1873,7 +1993,7 @@ class App {
 
     const container = document.getElementById('game-container');
     this.renderer = new Renderer(this.game, container);
-    this.interaction = new Interaction(this.game, this.renderer, this.audio, this.dialogs, this.victoryAnim);
+    this.interaction = new Interaction(this.game, this.renderer, this.audio, this.dialogs, this.victoryAnim, () => this.options);
 
     this.bindWindowControls();
     this.bindMenu();
@@ -1881,8 +2001,12 @@ class App {
     this.bindPersistence();
 
     // Check if auto-saved game exists on launch (if enabled in options)
+    let restored = false;
     if (this.options.loadAtStart) {
-      this.tryRestoreAutoSavedGame();
+      restored = this.tryRestoreAutoSavedGame();
+    }
+    if (!restored) {
+      this.startNewGame();
     }
 
     // Hook game events
@@ -1896,8 +2020,6 @@ class App {
         }
       }
     });
-
-    this.renderer.render();
   }
 
   loadOptions() {
@@ -2041,8 +2163,9 @@ class App {
   tryRestoreAutoSavedGame() {
     const json = localStorage.getItem('spider_saved_game');
     if (json) {
-      this.loadSavedGame();
+      return this.loadSavedGame();
     }
+    return false;
   }
 
   bindPersistence() {
@@ -2054,15 +2177,39 @@ class App {
     });
   }
 
-  startNewGame(diff = null) {
+  async startNewGame(diff = null) {
+    if (this.interaction && this.interaction.isBusy) return;
     if (diff !== null) {
       this.game.difficulty = diff;
       localStorage.setItem('spider_difficulty', diff);
     }
     localStorage.removeItem('spider_saved_game');
     this.game.initGame();
-    this.renderer.render();
-    this.audio.play('deal');
+
+    if (this.options.animDeal) {
+      this.renderer.render();
+      const initialFaceUpList = [];
+      for (let c = 0; c < 10; c++) {
+        const col = this.game.columns[c];
+        if (col.length > 0) {
+          initialFaceUpList.push({
+            col: c,
+            card: col[col.length - 1],
+            cardIdx: col.length - 1,
+            faceUp: true
+          });
+        }
+      }
+      if (this.interaction) this.interaction.isBusy = true;
+      try {
+        await this.renderer.animateDealCards(initialFaceUpList, this.audio);
+      } finally {
+        if (this.interaction) this.interaction.isBusy = false;
+      }
+    } else {
+      this.renderer.render();
+      this.audio.play('deal');
+    }
   }
 
   bindWindowControls() {
@@ -2131,9 +2278,7 @@ class App {
       'restart': () => {
         this.dialogs.showConfirm('重新开始', '是否从头开始这次游戏?', () => {
           this.recordGameResult(false);
-          this.game.initGame();
-          this.renderer.render();
-          this.audio.play('deal');
+          this.startNewGame();
         });
       },
       'undo': () => {

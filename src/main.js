@@ -26,7 +26,7 @@ class App {
 
     const container = document.getElementById('game-container');
     this.renderer = new Renderer(this.game, container);
-    this.interaction = new Interaction(this.game, this.renderer, this.audio, this.dialogs, this.victoryAnim);
+    this.interaction = new Interaction(this.game, this.renderer, this.audio, this.dialogs, this.victoryAnim, () => this.options);
 
     this.bindWindowControls();
     this.bindMenu();
@@ -34,8 +34,12 @@ class App {
     this.bindPersistence();
 
     // Check if auto-saved game exists on launch (if enabled in options)
+    let restored = false;
     if (this.options.loadAtStart) {
-      this.tryRestoreAutoSavedGame();
+      restored = this.tryRestoreAutoSavedGame();
+    }
+    if (!restored) {
+      this.startNewGame();
     }
 
     // Hook game events
@@ -49,8 +53,6 @@ class App {
         }
       }
     });
-
-    this.renderer.render();
   }
 
   loadOptions() {
@@ -194,8 +196,9 @@ class App {
   tryRestoreAutoSavedGame() {
     const json = localStorage.getItem('spider_saved_game');
     if (json) {
-      this.loadSavedGame();
+      return this.loadSavedGame();
     }
+    return false;
   }
 
   bindPersistence() {
@@ -207,15 +210,39 @@ class App {
     });
   }
 
-  startNewGame(diff = null) {
+  async startNewGame(diff = null) {
+    if (this.interaction && this.interaction.isBusy) return;
     if (diff !== null) {
       this.game.difficulty = diff;
       localStorage.setItem('spider_difficulty', diff);
     }
     localStorage.removeItem('spider_saved_game');
     this.game.initGame();
-    this.renderer.render();
-    this.audio.play('deal');
+
+    if (this.options.animDeal) {
+      this.renderer.render();
+      const initialFaceUpList = [];
+      for (let c = 0; c < 10; c++) {
+        const col = this.game.columns[c];
+        if (col.length > 0) {
+          initialFaceUpList.push({
+            col: c,
+            card: col[col.length - 1],
+            cardIdx: col.length - 1,
+            faceUp: true
+          });
+        }
+      }
+      if (this.interaction) this.interaction.isBusy = true;
+      try {
+        await this.renderer.animateDealCards(initialFaceUpList, this.audio);
+      } finally {
+        if (this.interaction) this.interaction.isBusy = false;
+      }
+    } else {
+      this.renderer.render();
+      this.audio.play('deal');
+    }
   }
 
   bindWindowControls() {
@@ -284,9 +311,7 @@ class App {
       'restart': () => {
         this.dialogs.showConfirm('重新开始', '是否从头开始这次游戏?', () => {
           this.recordGameResult(false);
-          this.game.initGame();
-          this.renderer.render();
-          this.audio.play('deal');
+          this.startNewGame();
         });
       },
       'undo': () => {

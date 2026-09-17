@@ -11,12 +11,14 @@
  */
 
 export class Interaction {
-  constructor(game, renderer, audioService, dialogs, victoryAnim) {
+  constructor(game, renderer, audioService, dialogs, victoryAnim, getOptions = null) {
     this.game = game;
     this.renderer = renderer;
     this.audio = audioService;
     this.dialogs = dialogs;
     this.victoryAnim = victoryAnim;
+    this.getOptions = getOptions;
+    this.isBusy = false;
 
     this.dragLayer = document.getElementById('drag-layer');
     this.bottomHintBtn = document.getElementById('board-scoreboard') || document.getElementById('bottom-hint-btn');
@@ -94,6 +96,8 @@ export class Interaction {
   }
 
   async handleStockClick() {
+    if (this.isBusy) return;
+
     const check = this.game.canDeal();
     if (!check.canDeal) {
       if (check.reason === 'EMPTY_COLUMN') {
@@ -104,24 +108,42 @@ export class Interaction {
     }
 
     this.clearSelection();
-    const result = this.game.dealRound();
-    if (result.success) {
-      this.audio.play('deal'); // 124.wav
-      this.renderer.render();
+    this.isBusy = true;
 
-      if (result.completedRuns && result.completedRuns.length > 0) {
-        for (let i = 0; i < result.completedRuns.length; i++) {
-          const run = result.completedRuns[i];
-          const slotIdx = this.game.completedSuits.length - result.completedRuns.length + i;
+    try {
+      const animDeal = !this.getOptions || this.getOptions().animDeal !== false;
+      const result = this.game.dealRound();
+      if (result.success) {
+        this.renderer.render();
+
+        if (animDeal) {
+          const dealtList = result.dealtCards.map(d => ({
+            col: d.col,
+            card: d.card,
+            cardIdx: this.game.columns[d.col].length - 1,
+            faceUp: true
+          }));
+          await this.renderer.animateDealCards(dealtList, this.audio);
+        } else {
           this.audio.play('deal'); // 124.wav
-          await this.renderer.animateCollectRun(run, slotIdx);
-          this.renderer.render();
+        }
+
+        if (result.completedRuns && result.completedRuns.length > 0) {
+          for (let i = 0; i < result.completedRuns.length; i++) {
+            const run = result.completedRuns[i];
+            const slotIdx = this.game.completedSuits.length - result.completedRuns.length + i;
+            this.audio.play('deal'); // 124.wav
+            await this.renderer.animateCollectRun(run, slotIdx);
+            this.renderer.render();
+          }
+        }
+
+        if (result.isWin) {
+          this.handleWin();
         }
       }
-
-      if (result.isWin) {
-        this.handleWin();
-      }
+    } finally {
+      this.isBusy = false;
     }
   }
 
@@ -142,6 +164,7 @@ export class Interaction {
   }
 
   onPointerDown(e) {
+    if (this.isBusy) return;
     const cardEl = e.target.closest('.card-element');
 
     // Right-click peek (FUN_01003712)
@@ -349,25 +372,32 @@ export class Interaction {
   }
 
   async executeMove(fromCol, cardIdx, toCol) {
+    if (this.isBusy) return;
     this.clearSelection();
-    const res = this.game.moveCards(fromCol, cardIdx, toCol);
-    if (res.success) {
-      this.audio.play('drop'); // 125.wav
-      this.renderer.render();
+    this.isBusy = true;
 
-      if (res.completedRuns && res.completedRuns.length > 0) {
-        for (let i = 0; i < res.completedRuns.length; i++) {
-          const run = res.completedRuns[i];
-          const slotIdx = this.game.completedSuits.length - res.completedRuns.length + i;
-          this.audio.play('deal'); // 124.wav
-          await this.renderer.animateCollectRun(run, slotIdx);
-          this.renderer.render();
+    try {
+      const res = this.game.moveCards(fromCol, cardIdx, toCol);
+      if (res.success) {
+        this.audio.play('drop'); // 125.wav
+        this.renderer.render();
+
+        if (res.completedRuns && res.completedRuns.length > 0) {
+          for (let i = 0; i < res.completedRuns.length; i++) {
+            const run = res.completedRuns[i];
+            const slotIdx = this.game.completedSuits.length - res.completedRuns.length + i;
+            this.audio.play('deal'); // 124.wav
+            await this.renderer.animateCollectRun(run, slotIdx);
+            this.renderer.render();
+          }
+        }
+
+        if (res.isWin) {
+          this.handleWin();
         }
       }
-
-      if (res.isWin) {
-        this.handleWin();
-      }
+    } finally {
+      this.isBusy = false;
     }
   }
 
@@ -375,6 +405,7 @@ export class Interaction {
    * Double-click on card: instantly smart-move to best column
    */
   onDoubleClick(e) {
+    if (this.isBusy) return;
     const cardEl = e.target.closest('.card-element');
     if (!cardEl) return;
 

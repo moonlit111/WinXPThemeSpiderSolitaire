@@ -251,4 +251,93 @@ export class Renderer {
     await new Promise(r => setTimeout(r, 330));
     flyer.remove();
   }
+
+  /**
+   * 1:1 Windows XP Sequential Deal Animation (FUN_010069b2 / FUN_01005115 / FUN_010047bd)
+   * Sequentially glides cards from the stock pile (bottom-right) to target columns one by one,
+   * accompanied by 124.wav sound per card over ~110ms flight time.
+   *
+   * @param {Array<{col: number, card: import('../engine/Card.js').Card, cardIdx: number, faceUp: boolean}>} dealtList
+   * @param {import('../engine/AudioService.js').AudioService} [audioService]
+   */
+  async animateDealCards(dealtList, audioService = null) {
+    if (!dealtList || dealtList.length === 0) return;
+
+    const dragLayer = document.getElementById('drag-layer') || document.body;
+    const stockRect = this.stockEl.getBoundingClientRect();
+    const packetIdx = Math.max(0, this.game.stockDealsLeft);
+    const startX = stockRect.left + packetIdx * 12;
+    const startY = stockRect.top;
+
+    // Collect and temporarily hide all destination cards so they appear strictly one-by-one
+    const hiddenEls = [];
+    for (const item of dealtList) {
+      const colEl = this.columnEls[item.col];
+      if (colEl) {
+        const cardEl = colEl.querySelector(`[data-card-idx="${item.cardIdx}"]`);
+        if (cardEl) {
+          cardEl.style.visibility = 'hidden';
+          hiddenEls.push(cardEl);
+        }
+      }
+    }
+
+    try {
+      for (let i = 0; i < dealtList.length; i++) {
+        const item = dealtList[i];
+        const colEl = this.columnEls[item.col];
+        if (!colEl) continue;
+
+        const targetCardEl = colEl.querySelector(`[data-card-idx="${item.cardIdx}"]`);
+        let targetX, targetY;
+
+        if (targetCardEl) {
+          const targetRect = targetCardEl.getBoundingClientRect();
+          targetX = targetRect.left;
+          targetY = targetRect.top;
+        } else {
+          const colRect = colEl.getBoundingClientRect();
+          targetX = colRect.left;
+          targetY = colRect.top;
+        }
+
+        const flyer = document.createElement('div');
+        flyer.className = 'deal-flyer';
+        flyer.style.left = `${startX}px`;
+        flyer.style.top = `${startY}px`;
+        flyer.style.transition = 'all 110ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+        const img = document.createElement('img');
+        img.src = item.faceUp ? item.card.faceImage : item.card.backImage;
+        flyer.appendChild(img);
+
+        dragLayer.appendChild(flyer);
+        void flyer.offsetWidth; // Reflow to trigger CSS transition
+
+        flyer.style.left = `${targetX}px`;
+        flyer.style.top = `${targetY}px`;
+
+        // Wait for flight (110ms)
+        await new Promise(r => setTimeout(r, 110));
+
+        flyer.remove();
+        if (targetCardEl) {
+          targetCardEl.style.visibility = 'visible';
+        }
+        if (audioService) {
+          audioService.play('deal'); // 124.wav
+        }
+
+        // Brief 15ms interval between deals for authentic rhythm
+        await new Promise(r => setTimeout(r, 15));
+      }
+    } finally {
+      // Clean up flyers and restore visibility guarantee
+      hiddenEls.forEach(el => {
+        el.style.visibility = 'visible';
+      });
+      dragLayer.querySelectorAll('.deal-flyer').forEach(el => el.remove());
+    }
+  }
 }
+
