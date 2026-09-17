@@ -260,8 +260,14 @@ export class SpiderGame {
     this.score = Math.max(0, this.score - 1); // FUN_01003596(this, -1)
     this.hintNeedsUpdate = true;
 
-    // Check if target column completed a run of 13
-    const runResult = this.checkAndCollectRun(toColIndex);
+    // Check all columns for any completed run of 13 cards (FUN_010064d5)
+    const completedRuns = [];
+    for (let c = 0; c < 10; c++) {
+      const runResult = this.checkAndCollectRun(c);
+      if (runResult.completed) {
+        completedRuns.push(runResult);
+      }
+    }
 
     if (this.completedSuits.length === 8) {
       this.isWon = true;
@@ -273,8 +279,9 @@ export class SpiderGame {
       toCol: toColIndex,
       cardsMoved: movingCards,
       autoFlipped,
-      completedRun: runResult.completed,
-      completedSuit: runResult.suit,
+      completedRuns,
+      completedRun: completedRuns.length > 0,
+      completedSuit: completedRuns.length > 0 ? completedRuns[0].suit : null,
       isWin: this.isWon,
       score: this.score,
       moves: this.moves
@@ -302,7 +309,7 @@ export class SpiderGame {
     }
 
     // Complete run of 13 found! Remove cards from column
-    col.splice(col.length - 13, 13);
+    const removedCards = col.splice(col.length - 13, 13);
     this.completedSuits.push(targetSuit);
     this.score += 100; // FUN_01003596(this, 100)
     this.hintNeedsUpdate = true;
@@ -315,7 +322,9 @@ export class SpiderGame {
 
     return {
       completed: true,
+      colIndex,
       suit: targetSuit,
+      cards: removedCards,
       autoFlipped
     };
   }
@@ -358,12 +367,12 @@ export class SpiderGame {
     this.score = Math.max(0, this.score - 1);
     this.hintNeedsUpdate = true;
 
-    // Check for complete runs in all 10 columns
+    // Check for complete runs in all 10 columns (FUN_010069b2)
     const completedRuns = [];
     for (let c = 0; c < 10; c++) {
       const run = this.checkAndCollectRun(c);
       if (run.completed) {
-        completedRuns.push({ col: c, suit: run.suit });
+        completedRuns.push(run);
       }
     }
 
@@ -376,6 +385,8 @@ export class SpiderGame {
       dealtCards,
       stockDealsLeft: this.stockDealsLeft,
       completedRuns,
+      completedRun: completedRuns.length > 0,
+      completedSuit: completedRuns.length > 0 ? completedRuns[0].suit : null,
       isWin: this.isWon,
       score: this.score,
       moves: this.moves
@@ -383,6 +394,23 @@ export class SpiderGame {
 
     this.notify('deal', result);
     return result;
+  }
+
+  debugTriggerWin() {
+    this.completedSuits = [0, 1, 2, 3, 0, 1, 2, 3];
+    this.isWon = true;
+    for (let c = 0; c < 10; c++) this.columns[c] = [];
+    this.stock = [];
+    this.stockDealsLeft = 0;
+    this.notify('move', {
+      success: true,
+      completedRuns: [],
+      completedRun: false,
+      isWin: true,
+      score: this.score,
+      moves: this.moves
+    });
+    return true;
   }
 
   /**

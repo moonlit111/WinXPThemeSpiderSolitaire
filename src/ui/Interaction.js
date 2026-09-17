@@ -109,8 +109,14 @@ export class Interaction {
       this.audio.play('deal'); // 124.wav
       this.renderer.render();
 
-      if (result.completedRuns.length > 0) {
-        setTimeout(() => this.audio.play('deal'), 300);
+      if (result.completedRuns && result.completedRuns.length > 0) {
+        for (let i = 0; i < result.completedRuns.length; i++) {
+          const run = result.completedRuns[i];
+          const slotIdx = this.game.completedSuits.length - result.completedRuns.length + i;
+          this.audio.play('deal'); // 124.wav
+          await this.renderer.animateCollectRun(run, slotIdx);
+          this.renderer.render();
+        }
       }
 
       if (result.isWin) {
@@ -342,15 +348,22 @@ export class Interaction {
     return bestCol;
   }
 
-  executeMove(fromCol, cardIdx, toCol) {
+  async executeMove(fromCol, cardIdx, toCol) {
     this.clearSelection();
     const res = this.game.moveCards(fromCol, cardIdx, toCol);
     if (res.success) {
       this.audio.play('drop'); // 125.wav
-      if (res.completedRun) {
-        setTimeout(() => this.audio.play('deal'), 200); // 124.wav on run cleared
-      }
       this.renderer.render();
+
+      if (res.completedRuns && res.completedRuns.length > 0) {
+        for (let i = 0; i < res.completedRuns.length; i++) {
+          const run = res.completedRuns[i];
+          const slotIdx = this.game.completedSuits.length - res.completedRuns.length + i;
+          this.audio.play('deal'); // 124.wav
+          await this.renderer.animateCollectRun(run, slotIdx);
+          this.renderer.render();
+        }
+      }
 
       if (res.isWin) {
         this.handleWin();

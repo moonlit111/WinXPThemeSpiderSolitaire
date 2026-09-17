@@ -147,4 +147,48 @@ console.log('Running 1:1 Reverse-Engineered Spider Solitaire Automated Tests...'
   assert.strictEqual(g.score, prevScore + 100, 'Run completion awards +100 points');
 }
 
+// 8. Multi-Column Run Collection on Move (Uncovering a run in fromCol or landing on toCol)
+{
+  const g = new SpiderGame(DIFFICULTY.ONE_SUIT);
+  // Col 0 has a complete run (K..2) with a stray 1 on Col 1 that moves to Col 0
+  g.columns[0] = [];
+  for (let r = 13; r >= 2; r--) {
+    g.columns[0].push(new Card(SUITS.SPADES, r, true));
+  }
+  g.columns[1] = [new Card(SUITS.SPADES, 1, true)];
+
+  const moveRes = g.moveCards(1, 0, 0);
+  assert.strictEqual(moveRes.success, true);
+  assert.strictEqual(moveRes.completedRuns.length, 1);
+  assert.strictEqual(moveRes.completedRuns[0].colIndex, 0);
+  assert.strictEqual(g.completedSuits.length, 1);
+  assert.strictEqual(g.columns[0].length, 0, 'Completed run must be removed from column 0');
+}
+
+// 9. Win Condition Verification: Strictly when all 8 suits are cleared (FUN_010061f0)
+{
+  const g = new SpiderGame(DIFFICULTY.ONE_SUIT);
+  assert.strictEqual(g.isWon, false);
+  
+  // Set 7 completed suits
+  g.completedSuits = [0, 0, 0, 0, 0, 0, 0];
+  g.columns[0] = [];
+  for (let r = 13; r >= 2; r--) {
+    g.columns[0].push(new Card(SUITS.SPADES, r, true));
+  }
+  g.columns[1] = [new Card(SUITS.SPADES, 1, true)];
+
+  const winMove = g.moveCards(1, 0, 0);
+  assert.strictEqual(winMove.isWin, true);
+  assert.strictEqual(g.isWon, true);
+  assert.strictEqual(g.completedSuits.length, 8);
+
+  // Test debugTriggerWin
+  const gDebug = new SpiderGame(DIFFICULTY.TWO_SUITS);
+  gDebug.debugTriggerWin();
+  assert.strictEqual(gDebug.isWon, true);
+  assert.strictEqual(gDebug.completedSuits.length, 8);
+}
+
 console.log('ALL REVERSE-ENGINEERED TESTS VERIFIED 100%! 🎉');
+

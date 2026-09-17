@@ -194,4 +194,61 @@ export class Renderer {
       el.classList.remove('hint-inverted', 'hinted');
     });
   }
+
+  /**
+   * 1:1 Windows XP Complete Run Slide-to-Foundation Animation (FUN_010062ae / FUN_010047bd)
+   * Glides the completed 13-card suit down to the foundation pile at bottom-left over 320ms.
+   */
+  async animateCollectRun(run, targetSlotIdx) {
+    const colEl = this.columnEls[run.colIndex];
+    if (!colEl || !this.foundationEl) return;
+
+    const foundationRect = this.foundationEl.getBoundingClientRect();
+    const targetX = foundationRect.left + targetSlotIdx * 12;
+    const targetY = foundationRect.top;
+
+    const colRect = colEl.getBoundingClientRect();
+    const cardEls = colEl.querySelectorAll('.card-element');
+    let startX = colRect.left + (colRect.width - 71) / 2;
+    let startY = colRect.top + Math.max(0, colEl.clientHeight - 120);
+
+    if (cardEls.length > 0) {
+      const topRect = cardEls[cardEls.length - 1].getBoundingClientRect();
+      startX = topRect.left;
+      startY = topRect.top;
+    }
+
+    const dragLayer = document.getElementById('drag-layer') || document.body;
+    const flyer = document.createElement('div');
+    flyer.className = 'collect-flyer';
+    flyer.style.position = 'fixed';
+    flyer.style.left = `${startX}px`;
+    flyer.style.top = `${startY}px`;
+    flyer.style.width = '71px';
+    flyer.style.height = '96px';
+    flyer.style.zIndex = '99999';
+    flyer.style.transition = 'all 320ms cubic-bezier(0.2, 0.8, 0.4, 1)';
+    flyer.style.pointerEvents = 'none';
+
+    // Show King of that suit
+    const kingImgIdx = 1 + run.suit * 13 + 12;
+    const img = document.createElement('img');
+    img.src = `assets/cards/CARD${kingImgIdx}.png`;
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.borderRadius = '3px';
+    img.style.boxShadow = '2px 4px 12px rgba(0, 0, 0, 0.6)';
+    flyer.appendChild(img);
+
+    dragLayer.appendChild(flyer);
+
+    // Force layout reflow
+    void flyer.offsetWidth;
+
+    flyer.style.left = `${targetX}px`;
+    flyer.style.top = `${targetY}px`;
+
+    await new Promise(r => setTimeout(r, 330));
+    flyer.remove();
+  }
 }

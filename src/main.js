@@ -472,10 +472,23 @@ class App {
           document.querySelector('.xp-window').classList.toggle('minimized');
         }
       }
+      // Ctrl+Shift+W / Cmd+Shift+W: Debug Instant Victory Test
+      else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'w' || e.key === 'W')) {
+        e.preventDefault();
+        this.triggerDebugWin();
+      }
     });
+  }
+
+  triggerDebugWin() {
+    this.game.debugTriggerWin();
+    this.renderer.render();
+    this.interaction.handleWin();
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   window.spiderApp = new App();
+  window.debugWin = () => window.spiderApp.triggerDebugWin();
 });
+

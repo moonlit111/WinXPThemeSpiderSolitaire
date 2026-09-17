@@ -1,6 +1,10 @@
 /**
  * VictoryAnimation.js
- * Renders the iconic Windows Solitaire/Spider bouncing card cascade animation using HTML5 Canvas.
+ * 1:1 Windows XP Spider Solitaire Victory Celebration (FUN_01008b21 / FUN_010084c1 / FUN_01008309 / FUN_01008700)
+ * Features:
+ * - Dual-station continuous fireworks launching and radial particle bursts (100 particles per burst)
+ * - Authentic GDI Ellipse sparks with gravity, drag, and glowing particle trails
+ * - Centered "你赢了!" (YOU WIN! / String 0x2d) rainbow rotating text in bold SimSun
  */
 
 export class VictoryAnimation {
@@ -9,21 +13,11 @@ export class VictoryAnimation {
     this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
     this.isRunning = false;
     this.animationId = null;
-    this.cardImages = [];
-    this.cards = [];
-    this.cardIndex = 0;
-    this.spawnTimer = 0;
 
-    this.preloadCardImages();
-  }
-
-  preloadCardImages() {
-    // Preload several card images for the celebration
-    for (let i = 1; i <= 52; i++) {
-      const img = new Image();
-      img.src = `assets/cards/CARD${i}.png`;
-      this.cardImages.push(img);
-    }
+    this.rockets = [];
+    this.particles = [];
+    this.lastLaunch = 0;
+    this.launchInterval = 450;
   }
 
   start() {
@@ -33,11 +27,16 @@ export class VictoryAnimation {
     this.resize();
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.cards = [];
-    this.cardIndex = 0;
-    this.spawnTimer = 0;
+    this.rockets = [];
+    this.particles = [];
+    this.lastLaunch = 0;
 
     window.addEventListener('resize', this.onResize);
+
+    // Initial dual launch stations (FUN_01008d21)
+    this.launchRocket(this.canvas.width * 0.35);
+    this.launchRocket(this.canvas.width * 0.65);
+
     this.loop();
   }
 
@@ -53,6 +52,8 @@ export class VictoryAnimation {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       }
     }
+    this.rockets = [];
+    this.particles = [];
     window.removeEventListener('resize', this.onResize);
   }
 
@@ -67,74 +68,151 @@ export class VictoryAnimation {
     if (this.isRunning) this.resize();
   };
 
-  spawnCard() {
-    if (this.cardImages.length === 0) return;
+  launchRocket(targetX = null) {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const x = targetX !== null ? targetX : w * (0.2 + Math.random() * 0.6);
+    const targetY = h * (0.15 + Math.random() * 0.35);
+    const speed = Math.sqrt(2 * 0.25 * (h - targetY));
 
-    const img = this.cardImages[this.cardIndex % this.cardImages.length];
-    this.cardIndex++;
+    const colors = [
+      '#ff3b30', '#ff9500', '#ffcc00', '#34c759',
+      '#00c7be', '#32ade6', '#007aff', '#5856d6',
+      '#af52de', '#ff2d55', '#ffffff'
+    ];
+    const color = colors[Math.floor(Math.random() * colors.length)];
 
-    const cardWidth = 71;
-    const cardHeight = 96;
-
-    // Spawn near foundation or random top column
-    const startX = Math.random() * (this.canvas.width - cardWidth);
-    const startY = 80 + Math.random() * 100;
-
-    this.cards.push({
-      img,
-      x: startX,
-      y: startY,
-      vx: (Math.random() - 0.5) * 14,
-      vy: -(Math.random() * 6 + 4),
-      gravity: 0.45,
-      bounce: -0.82,
-      width: cardWidth,
-      height: cardHeight,
-      active: true
+    this.rockets.push({
+      x,
+      y: h,
+      vx: (Math.random() - 0.5) * 2,
+      vy: -speed,
+      targetY,
+      color,
+      trail: []
     });
   }
 
-  loop = () => {
+  explodeRocket(rocket) {
+    const count = 100; // FUN_010084c1: exactly 100 particles!
+    const colors = [
+      rocket.color,
+      '#ffffff',
+      '#ffcc00',
+      '#ff3b30',
+      '#34c759',
+      '#32ade6'
+    ];
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 5.5 + 1.2;
+      const c = Math.random() < 0.7 ? rocket.color : colors[Math.floor(Math.random() * colors.length)];
+
+      this.particles.push({
+        x: rocket.x,
+        y: rocket.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: c,
+        radius: Math.random() * 2.5 + 1.5,
+        alpha: 1.0,
+        decay: Math.random() * 0.015 + 0.012,
+        gravity: 0.12 // FUN_010084c1 gravity
+      });
+    }
+  }
+
+  loop = (timestamp = 0) => {
     if (!this.isRunning) return;
 
-    this.spawnTimer++;
-    // Spawn cards progressively
-    if (this.spawnTimer % 6 === 0 && this.cards.length < 104) {
-      this.spawnCard();
+    // Semi-transparent fade to create authentic particle trails
+    this.ctx.fillStyle = 'rgba(0, 70, 30, 0.22)';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Auto launch rockets
+    if (!this.lastLaunch || timestamp - this.lastLaunch > this.launchInterval) {
+      this.launchRocket();
+      this.lastLaunch = timestamp;
+      this.launchInterval = 380 + Math.random() * 400;
     }
 
-    // Windows classic effect: we don't clear the background, so bouncing cards leave an iconic trail!
-    // To keep it smooth, we can leave trails
-    for (let i = 0; i < this.cards.length; i++) {
-      const card = this.cards[i];
-      if (!card.active) continue;
+    // Update and draw rockets
+    for (let i = this.rockets.length - 1; i >= 0; i--) {
+      const r = this.rockets[i];
+      r.x += r.vx;
+      r.y += r.vy;
+      r.vy += 0.15; // rocket gravity deceleration
 
-      // Draw card
-      if (card.img.complete) {
-        this.ctx.drawImage(card.img, Math.round(card.x), Math.round(card.y), card.width, card.height);
+      // Draw spark
+      this.ctx.beginPath();
+      this.ctx.arc(r.x, r.y, 3, 0, Math.PI * 2);
+      this.ctx.fillStyle = r.color;
+      this.ctx.fill();
+
+      // Smoke / flame trail
+      r.trail.push({ x: r.x, y: r.y, alpha: 1.0 });
+      if (r.trail.length > 8) r.trail.shift();
+
+      for (const t of r.trail) {
+        this.ctx.beginPath();
+        this.ctx.arc(t.x, t.y, 2, 0, Math.PI * 2);
+        this.ctx.fillStyle = `rgba(255, 200, 50, ${t.alpha})`;
+        this.ctx.fill();
+        t.alpha -= 0.12;
       }
 
-      // Physics update
-      card.x += card.vx;
-      card.y += card.vy;
-      card.vy += card.gravity;
-
-      // Floor bounce
-      if (card.y + card.height >= this.canvas.height) {
-        card.y = this.canvas.height - card.height;
-        card.vy *= card.bounce;
-
-        // If bounce energy is depleted, let it roll off screen
-        if (Math.abs(card.vy) < 1) {
-          card.vy = 0;
-        }
-      }
-
-      // Walls bounce or roll off
-      if (card.x < -card.width || card.x > this.canvas.width + card.width) {
-        card.active = false;
+      if (r.y <= r.targetY || r.vy >= 0) {
+        this.explodeRocket(r);
+        this.rockets.splice(i, 1);
       }
     }
+
+    // Update and draw particles (FUN_01008700: Ellipse with GDI brush)
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.985;
+      p.vy *= 0.985;
+      p.vy += p.gravity;
+      p.alpha -= p.decay;
+
+      if (p.alpha <= 0) {
+        this.particles.splice(i, 1);
+        continue;
+      }
+
+      this.ctx.save();
+      this.ctx.globalAlpha = Math.max(0, p.alpha);
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      this.ctx.fillStyle = p.color;
+      this.ctx.shadowBlur = 6;
+      this.ctx.shadowColor = p.color;
+      this.ctx.fill();
+      this.ctx.restore();
+    }
+
+    // Draw central "你赢了!" text with rainbow cycling color (FUN_01008309)
+    const cx = this.canvas.width / 2;
+    const cy = this.canvas.height / 2 - 20;
+    const hue = (Date.now() / 15) % 360;
+
+    this.ctx.save();
+    this.ctx.font = 'bold 56px "SimSun", "宋体", "Tahoma", sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    // Black stroke shadow outline
+    this.ctx.strokeStyle = '#000000';
+    this.ctx.lineWidth = 6;
+    this.ctx.strokeText('你赢了!', cx, cy);
+
+    // Rainbow rotating fill
+    this.ctx.fillStyle = `hsl(${hue}, 100%, 65%)`;
+    this.ctx.fillText('你赢了!', cx, cy);
+    this.ctx.restore();
 
     this.animationId = requestAnimationFrame(this.loop);
   };
